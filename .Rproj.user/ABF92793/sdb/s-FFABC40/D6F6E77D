@@ -1,0 +1,17 @@
+{
+    "contents" : "Package: Citrus\nType: Package\nTitle: Single cell RNA sequencing analysis tools\nVersion: 0.99\nDate: 2016-01-11\nAuthor: Mengjie Chen\nMaintainer: Mengjie Chen <mengjie@email.unc.edu>\nDescription: More about what it does (maybe more than one line)\nLicense: What license is it under?\nLinkingTo: Rcpp, RcppArmadillo, genlasso, gplots\nImports: Rcpp, RcppArmadillo, genlasso, gplots\nPackaged: 2015-08-07 21:31:35 UTC; mengjiechen\n",
+    "created" : 1452571631022.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3218992691",
+    "id" : "D6F6E77D",
+    "lastKnownWriteTime" : 1452571719,
+    "path" : "~/Google Drive/Software/Citrus-master/DESCRIPTION",
+    "project_path" : "DESCRIPTION",
+    "properties" : {
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "type" : "dcf"
+}
