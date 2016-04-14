@@ -1,0 +1,112 @@
+%\VignetteIndexEntry{Citrus Vignette}
+%\VignetteKeyword{single cell sequencing}
+%\VignettePackage{Citrus}
+
+\documentclass[12pt]{article}
+
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{times}
+\usepackage{Sweave}              % Comment out if not using Sweave
+\usepackage{fullpage}
+
+\def\E{\mathord{I\kern-.35em E}}
+\def\R{\mathord{I\kern-.35em R}}
+\def\P{\mathord{I\kern-.35em P}}
+
+\topmargin=-0.5in
+\textheight=9in
+\textwidth=6.5in
+\oddsidemargin=0in
+
+\newcommand{\proglang}[1]{\textbf{#1}}
+\newcommand{\pkg}[1]{\texttt{\textsl{#1}}}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\mg}[1]{{\textcolor {magenta} {#1}}}
+\newcommand{\gr}[1]{{\textcolor {green} {#1}}}
+\newcommand{\bl}[1]{{\textcolor {blue} {#1}}}
+
+\textwidth=5in
+\textheight=8.5in
+\oddsidemargin=0.2in
+\evensidemargin=0.2in
+\headheight=0in
+\headsep=0in
+
+
+\begin{document}
+\SweaveOpts{concordance=TRUE}
+\SweaveOpts{highlight=TRUE, tidy=TRUE, keep.space=TRUE, keep.blank.space=FALSE, keep.comment=TRUE}
+\SweaveOpts{prefix.string=Fig}
+
+\title{Citrus: a toolkit for }
+\author{Mengjie Chen, Xiang Zhou}
+\date{11 April 2016}
+\maketitle
+
+
+\section{Introduction}
+This guide provides a tour of \pkg{Citrus} package, a R/c++ package that is specialized in the RNA sequencing analysis in single cell studies. \pkg{Citrus} is an ongoing project for a collection of single cell methods. The current release includes scPLS, a data normalization method that can control for confounding effects using information from both control and target genes. scPLS can be used to remove unwanted variation, such as technical effect or cell cycle effect. 
+This manual is composed of test-runs on basic functions with simulated datasets. The main purpose is to check whether the package is compiled well and works as expected on different systems.
+
+\subsection{User Guide}
+A user guide with detailed analysis on real data, is available as part of the online documentation. To reach the User's Guide, install the Citrus package and load it into an R session by \texttt{library(Citrus)}. In R for Windows, the User's Guide will then be available from the drop-down menu called ``Vignettes''.
+In other operating systems, type
+<<>>=
+library(Citrus)
+CitrusUsersGuide()
+@
+at the R prompt to open the User's Guide in a pdf viewer.
+
+\section{Test run on \code{scPLS()}}
+<<echo=FALSE>>=
+options(width=60)
+@
+Let us simulate a toy example with 100 target genes with 10 control genes from 40 cells. These 40 cells belong to two different phenotypes. The first 10 genes are differentially expressed in two phenotypes.  
+<<>>=
+set.seed(1)
+require(MASS)
+p <- 10
+q <- 100
+sig <- 10
+k1 <- 2
+k2 <- 5
+spikein <- sqrt(2^2*0.1)
+bio <- sqrt(2^2*0.3)
+noise <- sqrt(2^2*0.6)
+total <- 2^2*0.1 + 2^2*0.6
+n <- 40
+pve <- 0.2
+lambda_y <- matrix(rnorm(p*k1, mean = 0.2, sd = spikein), 
+                   ncol = p, nrow = k1) 
+lambda_x <- matrix(rnorm(q*k1, mean = -0.2, sd = spikein),  
+                   ncol = q, nrow = k1)
+diff_var <- sqrt(pve/(1-pve)*(total^2))
+beta <- rnorm(sig, sd = diff_var)
+X_sig <- matrix(rnorm(n/2, mean = 1, sd = 0.1),  ncol = 1, nrow = n/2)
+Diff <- X_sig%*%matrix(beta, nrow = 1)
+Z_s <- matrix(c(rnorm(k1*n/2), rnorm(k1*n/2, mean = -0.5)),  
+              ncol = k1, nrow = n, byrow = T)
+Z_u <- matrix(rnorm(k2*n), ncol = k2, nrow = n)
+lambda_u <- matrix(rnorm(q*k1, sd = bio), ncol = q, nrow = k2) 
+lambda_u[, 1:100] <- 0
+Control <- Z_s%*%lambda_y + 
+            matrix(rnorm(p*n, sd = noise), ncol = p, nrow = n)
+Target <- Z_s%*%lambda_x + Z_u%*%lambda_u + 
+            matrix(rnorm(q*n, sd = noise), ncol = q, nrow = n)
+Target[1:(n/2), 1:sig] <- Target[1:(n/2), 1:sig] + Diff
+@
+The inputs of function \code{scPLS} include a $n \times q$ matrix of target gene expression, a $n \times p$ matrix of control gene expression, a pre-specified number of technical factors and a pre-specified number of structured biological factors. 
+<<>>=
+res <- scPLS(Target, Control, k1 = 6, k2 = 10, iter = 300, 
+             method = "EM", Chunk = FALSE)
+@
+The default algorithm is the ``EM-in-Chunks" algorithm, which will randomly devide genes into different chunks and accelarate the computation. The default chunk size is 1000. We recommend to use the ``EM-in-Chunks" algorithm only for large gene sets. When \code{Chunk = FALSE}, the ``Naive EM" algorithm will be used.   
+
+<<>>=
+str(res) 
+@
+\code{scPLS} outputs estimates for factor matrix, loading matrix, coufounding effect and expression matrix after removing coufounding effect.   
+
+\end{document}

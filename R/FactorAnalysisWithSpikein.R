@@ -1,24 +1,5 @@
-#' This is a function to do factor analysis.
-#' @param Expression: A $n \times q$ matrix for genes.
-#' @param Spikein: A $n \times p$ matrix for spikeins.
-#' @param k1: The number of technical factors.
-#' @param k2: The number of structured biological factors.
-#' @param iter: The number of iterations for the EM algorithm. The default is 500.
-#' @param alpha, kappa, diagH, g, h1, h2, c, d: These are hyperparameters if using the IBP prior.
-#' @param limit: the maximal number of factors if using the IBP prior. 
-#' @param method: The method used to infer the latent factors. The default is EM algorithm.
-#' Other choices include EMSparse algorithm: penalty on sparsity of the factor matrix is specified. 
-#' EMSparseTraining algorithm: penalty on sparsity is learned from training samples.
-#' EMparseNfold algorithm: penalty on sparsity is learned from N fold cross-validation.
-#' IBP algorithm: the sparse factor matrix modeled by an IBP prior.
-#' PCA algorithm: The initializer for the EM algorithm. The latent factors are estimated from a SVD.
-#' @param penalty: A sequence of penality will be tested in training or cross-validation.    
-#' @param tol: Tolerance for the convergence.
-#' @param givenpenalty: Specified penalty level on sparsity of the factor matrix. The default is NULL. 
-#' @param kfold: The fold number for cross-validation.
-#' @param Chunk: Whether to use EM-in-chunks algorithm. The default is TRUE.
-#' @param chunk.size: The chunk size (number of genes) for EM-in-chunks algorithm. The default is 1000.        
-
+#' This is function to do factor analysis.
+#' @param Expression A matrix..
 
 FactorAnalysisWithSpikein <- function(Expression, Spikein, k1, k2, iter = 500, alpha = 10, 
                             kappa = 2, diagH = 1, g = 1, h1 = 1, h2 = 1, c = 1, d = 1, limit = 25,

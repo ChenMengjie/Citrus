@@ -1,5 +1,5 @@
 MixtureFactorModelWithoutSpikein <- function(Expression, K, iniL = 3, 
-                    TruncateL = 20, iter = 1000, maxK = 20, nu0 = 20, r = 0.1, s = 200, alpha = 1, alpha2 = 5,
+                    TruncateL = 20, iter = 1000, maxK = 20, nu0 = 50, r = 0.1, s = 200, alpha = 1, alpha2 = 5,
                     kappa0 = 1, m = 0.75, g = 1, h = 1, c = 1, d = 1, kappa = 2, method = c("SpikeSlab", "IBP"), 
                     s1 = 1, s2 = 1, iter_to_average = 10, mergeCluster = TRUE, mergeN = 5, average_label = TRUE){
   
@@ -82,7 +82,12 @@ MixtureFactorModelWithoutSpikein <- function(Expression, K, iniL = 3,
   Likelihood <- 0
   
   for(i in 1:n){
-    Likelihood <- Likelihood + dmvnrmRowArma(Q[i, ], MuList[ClusterLabel[i], ], SigmaList[, , ClusterLabel[i]], TRUE)
+    test <- try(Likelihood <- Likelihood + dmvnrmRowArma(Q[i, ], MuList[ClusterLabel[i], ], SigmaList[, , ClusterLabel[i]], TRUE))
+    if(class(test) == "try-error") {
+      print(MuList)
+      print(i)
+      print(ClusterLabel)
+    }
   }
   psi_x <- res$psi
   for(j in 1:q){

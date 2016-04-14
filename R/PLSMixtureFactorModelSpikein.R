@@ -87,7 +87,12 @@ PLSMixtureFactorModelSpikein <- function(Expression, Spikein, k1, k2, iniL = 3, 
   
   Likelihood <- 0
   for(i in 1:n){
-    Likelihood <- Likelihood + dmvnrmRowArma(Q[i, ], MuList[ClusterLabel[i], ], SigmaList[, , ClusterLabel[i]], TRUE) 
+    test <- try(Likelihood <- Likelihood + dmvnrmRowArma(Q[i, ], MuList[ClusterLabel[i], ], SigmaList[, , ClusterLabel[i]], TRUE)) 
+    if(class(test) == "try-error") {
+      print(MuList)
+      print(i)
+      print(ClusterLabel)
+    }
   }
   for(j in 1:p){
     Likelihood <- Likelihood + sum(dnorm(c(E_y[, j]), 0, psi_y[j], TRUE))
