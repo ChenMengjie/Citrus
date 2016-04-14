@@ -1,67 +1,52 @@
 <!DOCTYPE html>
-<html>
+<html lang="en-us">
   <head>
-    <meta charset='utf-8'>
-    <meta http-equiv="X-UA-Compatible" content="chrome=1">
-    <meta name="viewport" content="width=640">
-
-    <link rel="stylesheet" href="stylesheets/core.css" media="screen">
-    <link rel="stylesheet" href="stylesheets/mobile.css" media="handheld, only screen and (max-device-width:640px)">
-    <link rel="stylesheet" href="stylesheets/github-light.css">
-
-    <script type="text/javascript" src="javascripts/modernizr.js"></script>
-    <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
-    <script type="text/javascript" src="javascripts/headsmart.min.js"></script>
-    <script type="text/javascript">
-      $(document).ready(function () {
-        $('#main_content').headsmart()
-      })
-    </script>
+    <meta charset="UTF-8">
     <title>Citrus by ChenMengjie</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
   </head>
-
   <body>
-    <a id="forkme_banner" href="https://github.com/ChenMengjie/Citrus">View on GitHub</a>
-    <div class="shell">
+    <section class="page-header">
+      <h1 class="project-name">Citrus</h1>
+      <h2 class="project-tagline">A toolkit for single cell sequencing analysis</h2>
+      <a href="https://github.com/ChenMengjie/Citrus" class="btn">View on GitHub</a>
+      <a href="https://github.com/ChenMengjie/Citrus/zipball/master" class="btn">Download .zip</a>
+      <a href="https://github.com/ChenMengjie/Citrus/tarball/master" class="btn">Download .tar.gz</a>
+    </section>
 
-      <header>
-        <span class="ribbon-outer">
-          <span class="ribbon-inner">
-            <h1>Citrus</h1>
-            <h2>A toolkit for single cell sequencing analysis</h2>
-          </span>
-          <span class="left-tail"></span>
-          <span class="right-tail"></span>
-        </span>
-      </header>
-
-      <section id="downloads">
-        <span class="inner">
-          <a href="https://github.com/ChenMengjie/Citrus/zipball/master" class="zip"><em>download</em> .ZIP</a><a href="https://github.com/ChenMengjie/Citrus/tarball/master" class="tgz"><em>download</em> .TGZ</a>
-        </span>
-      </section>
-
-
-      <span class="banner-fix"></span>
-
-
-      <section id="main_content">
-        <h3>
+    <section class="main-content">
+      <h3>
 <a id="welcome-to-citrus-pages" class="anchor" href="#welcome-to-citrus-pages" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Welcome to Citrus Pages.</h3>
 
-<p>Citrus is a toolkit for single cell sequencing analysis under development. </p>
+<p>Citrus is a toolkit for single cell sequencing analysis under development. 
+Citrus is written in c++ with easy-to-use R wrappers. 
+To use Citrus, the installation of Rcpp and RcppArmadillo is required. </p>
 
 <h3>
 <a id="available-methods" class="anchor" href="#available-methods" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Available methods</h3>
 
-<p>Now a normalized method and a clustering method are available in the beta version. Tutorial for the usage will be available shortly. </p>
+<p>Now a normalized method and a clustering method are available in the distributed version. </p>
 
 <p>Method 1: scPLS: a normalization method to remove unwanted variation using both control and target genes.</p>
+
+<p>The description of the methodology and algorithm can be found in the manuscript
+Chen M, Zhou X: Normalization of single cell RNA sequencing data using both control and target genes. 2016
+which can be downloaded at: <a href="http://biorxiv.org/content/early/2016/03/21/045070">http://biorxiv.org/content/early/2016/03/21/045070</a></p>
+
+<p>A vignette on how to use scPLS is distributed together with the package.</p>
+
+<p>Method 2: a clustering method which can account for confounding factors.</p>
+
+<p>The description of the method and the tutorial of software on clustering will be available shortly.</p>
 
 <h3>
 <a id="why-do-we-call-it-citrus" class="anchor" href="#why-do-we-call-it-citrus" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Why do we call it citrus?</h3>
 
-<p>Citrus is not a short name for any of our methods. To honor Bowtie/Cufflinks, Salmon/Sailfish series, we are creating a fruit collection. </p>
+<p>Citrus is not a short name for any of our methods. To honor Bowtie/Cufflinks and Salmon/Sailfish series, we are creating a fruit collection. </p>
 
 <h3>
 <a id="author" class="anchor" href="#author" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Author</h3>
@@ -69,22 +54,17 @@
 <p>Mengjie Chen (UNC) </p>
 
 <p>Xiang Zhou (Umich)</p>
-      </section>
 
-      <footer>
-        <span class="ribbon-outer">
-          <span class="ribbon-inner">
-            <p>this project by <a href="https://github.com/ChenMengjie">ChenMengjie</a> can be found on <a href="https://github.com/ChenMengjie/Citrus">GitHub</a></p>
-          </span>
-          <span class="left-tail"></span>
-          <span class="right-tail"></span>
-        </span>
-        <p>Generated with <a href="https://pages.github.com">GitHub Pages</a> using Merlot</p>
-        <span class="octocat"></span>
+<p>Bug report, comments or questions please send to <a href="mailto:mengjie@email.unc.edu">mengjie@email.unc.edu</a>.</p>
+
+      <footer class="site-footer">
+        <span class="site-footer-owner"><a href="https://github.com/ChenMengjie/Citrus">Citrus</a> is maintained by <a href="https://github.com/ChenMengjie">ChenMengjie</a>.</span>
+
+        <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a> using the <a href="https://github.com/jasonlong/cayman-theme">Cayman theme</a> by <a href="https://twitter.com/jasonlong">Jason Long</a>.</span>
       </footer>
 
-    </div>
+    </section>
 
-    
+  
   </body>
 </html>
