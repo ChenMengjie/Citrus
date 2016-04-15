@@ -1,4 +1,4 @@
-CitrusUsersGuide <- function(view=TRUE)
+CitrusUserGuide <- function(view=TRUE)
 #	Written by Mengjie, Apr 2016; modified from edgeRUsersGuide() in package edgeR.  
 #	Find User's Guide 
 {
