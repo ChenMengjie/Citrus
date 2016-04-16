@@ -55,7 +55,7 @@ A user guide with detailed analysis on real data, is available as part of the on
 In other operating systems, type
 <<>>=
 library(Citrus)
-CitrusUsersGuide()
+CitrusUserGuide()
 @
 at the R prompt to open the User's Guide in a pdf viewer.
 
