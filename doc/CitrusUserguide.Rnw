@@ -1,0 +1,254 @@
+
+%\VignetteIndexEntry{Citrus Vignette}
+%\VignetteKeyword{single cell sequencing}
+%\VignettePackage{Citrus}
+
+\documentclass[11pt]{article}
+
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{times}
+
+\newcommand{\pkg}[1]{\texttt{\textsl{#1}}}
+\newcommand{\code}[1]{\texttt{#1}}
+
+<<knitr, echo=FALSE, results="hide">>=
+library("knitr")
+opts_chunk$set(tidy=TRUE,dev="png",fig.show="hide",
+               fig.width=4,fig.height=4.5,
+               message=FALSE)
+@ 
+
+<<style, eval=TRUE, echo=FALSE, results="asis">>=
+BiocStyle::latex()
+@
+
+\author{Mengjie Chen, Xiang Zhou}
+\title{Citrus: a toolkit for single cell sequencing data analysis}
+
+
+\begin{document}
+\SweaveOpts{concordance=TRUE}
+
+%\SweaveOpts{concordance=TRUE}
+
+\maketitle
+
+  \vspace{1em}
+  
+  \textbf{Citrus version:} \Sexpr{packageVersion("Citrus")}
+
+  \vspace{1em}
+  
+  \begin{center}
+    \begin{tabular}{ | l | }
+      \hline 
+      Please cite:  \\
+     Mengjie Chen, Xiang Zhou. \\
+     Normalization of single cell RNA sequencing data using both control and target genes. \\
+      \hline 
+    \end{tabular}
+  \end{center}
+
+
+<<options, results="hide", echo=FALSE>>=
+options(digits=3, width=80, prompt=" ", continue=" ")
+@
+
+\newpage
+
+\tableofcontents
+
+\newpage
+
+\section{Introduction of \pkg{Citrus}}
+\pkg{Citrus} is a R/c++ package that is specialized in the analysis of RNA sequencing data from single cell studies. The current release features \code{scPLS}, a data normalization method that can control for confounding effects by borrowing information from both control and target genes. scPLS can be used to remove unwanted variation, such as technical effect or cell cycle effect. 
+
+
+\section{\code{scPLS}}
+Like any other genomic sequencing experiment, scRNAseq studies are influenced by many factors that can introduce unwanted variation in the sequencing data and confound the down-stream analysis. Due to low capture efficiency and low amount of input material, such unwanted variation are exacerbated in scRNAseq experiments. As a result, adjusting for confounding factors and normalizing scRNAseq data is crucial for accurate estimation of gene expression levels and successful down-stream analysis. Yet some confounding effects are due to observable batches and can be adjusted for by including batch labels and technician ids as covariates. However, many confounding factors are hidden and are difficult or even impossible to measure. Common hidden confounding factors include various technical artifacts during library preparation and sequencing, and unwanted biological confounders such as cell cycle status. These hidden confounding factors can cause systematic bias, are notoriously difficult control for, and are the focus of the present study. 
+
+To mitigate the influence of hidden confounding factors, we develop scPLS, a latent factor based model. The genes are divided into two sets: a control set of genes that are used to infer the confounding factors and a target set of genes that are of primary interest. The confounding factors inferred from the control set are used to remove unwanted variation in the target genes for subsequent downstream analysis. For example, most scRNAseq studies add ERCC spike-in controls during the PCR amplification and sequencing steps. The spike-in controls can be used to capture the hidden confounding technical noise associated with the experimental procedures for normalizing genes of primary interest. Similarly, most scRNAseq studies include a set of control genes that are known to have varying expression levels across cell cycles. These cell cycle genes can be used to capture the unmeasured cell cycle status of each cell, which is further used to normalize target genes. Compared to existing methods, our approach taking into account the information from both control and target genes. In addition, our method can model other systematic biological variation and heterogeneity, which are often observed in the target genes. By incorporating such systematic heterogeneity, we can further improve the estimation of the confounding factors and the removal of unwanted variation. We have shown the effectiveness of our approach in our manuscript. This method is implemented in function \code{scPLS()}.
+
+\subsection{Model and input}
+
+We model the control and target gene sets jointly by the following scPLS model
+\begin{eqnarray}
+\mathbf{x_i} &\sim& MVN(\boldsymbol\Lambda_x^T \mathbf{z_i}, \boldsymbol\psi_x), \label{model1} \\
+\mathbf{y_i} &\sim& MVN(\boldsymbol\Lambda_y^T \mathbf{z_i} +\boldsymbol\Lambda_u^T \mathbf{u_i}, \boldsymbol\psi_y), \label{model2}
+\end{eqnarray}
+where for $i$-th individual cell, $\mathbf{x_i}$ is a $q$-vector of expression level for $q$ control genes; $\mathbf{y_i}$ is a $p$-vector of expression level for $p$ target genes; $\mathbf{z_i}$ is a $k_z$-vector of confounding factors that influence both control and target genes ($k_z < q$); the confounding effects are represented by the $q$ by $k_z$ loading matrix $\boldsymbol\Lambda_x$ for the controls and the $p$ by $k_1$ loading matrix $\boldsymbol\Lambda_y$ for the target genes; $\mathbf{u_i}$ is a $k_u$-vector of biological factors unique to target genes ($k_u < p$); the biological factors could represent some underlying pathways or transcription factors that affect multiple genes; $\boldsymbol\Lambda_u$ is a $p$ by $k_u$ loading matrix; $\boldsymbol\psi_x$ is the diagonal covariance matrix for $q$-dimensional idiosyncratic error for $x_i$; $\boldsymbol\psi_y$ is the diagonal covariance matrix for $p$-dimensional idiosyncratic error for $\mathbf{y_i}$; MVN denotes the multivariate normal distribution.
+
+In the above model, $x_i$ and $y_i$ represent input data, $k_1$ and $k_2$ are prespeficied number of latent factors, $\boldsymbol\Lambda_x$, $\boldsymbol\Lambda_y$, $\boldsymbol\Lambda_u$, $\mathbf{z_i}$ and $\mathbf{u_i}$ are parameters to be estimated and will be the output of our algorithm. 
+
+\subsection{Removing technical effect using spike-ins}
+<<echo=FALSE>>=
+options(width=60)
+@
+We use the cell cycle data published in Buettner et al as an example to illustrate the usage of \code{scPLS()} function. We selected top 500 non cell cyle genes, 100 cell cycle genes and 20 spike-ins with largest variance across samples.
+<<Load>>=
+library(Citrus)
+data(CellCycleData)
+table(CellCycleData$Label)
+@
+To remove technical effect, \code{scPLS()} takes inputs of a $n \times q$ matrix of target gene expression, a $n \times p$ matrix of spike-in, a pre-specified number of technical factors $k_1$ and a pre-specified number of structured biological factors $k_2$. The numbers of factors $k_1$ and $k_2$ can be determined by model selection criteria later. 
+<<Input>>=
+Control <- CellCycleData$Expression[, CellCycleData$Label == "Spikein"]
+Target <- CellCycleData$Expression[, CellCycleData$Label != "Spikein"]
+system.time(res <- scPLS(Target, Control, k1 = 2, k2 = 5, iter = 100, 
+             method = "EM", Chunk = FALSE, center = TRUE))
+@
+The default algorithm is the ``EM-in-Chunks" algorithm, which will randomly devide genes into different chunks, average the estimates from chunks and thus accelarate the computation. The default chunk size is 1000. We recommend to use the ``EM-in-Chunks" algorithm only for large gene sets. When \code{Chunk = FALSE}, the ``Naive EM" algorithm will be used. In addition, \code{scPLS()} will center the expression of each gene to mean of 0 unless setting \code{center = FALSE}.  
+<<Summary>>=
+summary(res)
+@
+\code{scPLS()} outputs the estimates for confounding factor matrix $\boldsymbol\Lambda_y$ (\code{lambdaY}), confounding loading matrix $\mathbf{Z}$ (\code{Z}), strutured factor matrix $\boldsymbol\Lambda_u$ (\code{Factor}), strutured factor loading matrix $\mathbf{U}$ in \ref{model2} (\code{Loading}). The likelihood for \ref{model2} is saved as \code{Likelihood}, which can be used for model comparison later. The expression matrix after adjusting for coufounding effect is stored in \code{Adjusted}, which is calculated by $Y - \Lambda_y \mathbf{Z}$. 
+<<Variance>>=
+head(res$VarianceSummary)
+@
+\code{VarianceSummary} stores total sample variance and sample technical variance as well as total variance and technical variance estimated by the fitted model for each gene. We can further quantify the proportion of variance explained by different sources as the following.
+For each gene, the expression variance is partitioned into three components: a component that is explained by technical factors, a component that is explained by structured biological factors, and the residual error variance. Genes are evenly divided into ten quantiles based on the sample variance. 
+<<Prop>>=
+Var <- res$VarianceSummary
+ConProp <- round(Var['ModelConfounding']/Var['Model'], 3)
+StructuredProp <- round(Var['ModelStructure']/Var['Model'], 3)
+PropTable <- data.frame(ConProp, StructuredProp, 
+                        1 - ConProp - StructuredProp)
+colnames(PropTable) <- c("Tech", "Structured", "Residue")
+QuantileTable <- QuantileSummary(PropTable, quantiles = seq(0.1, 1, by = 0.1), 
+                                 rankingby = unlist(Var['Sample']))
+head(QuantileTable)
+@
+We can use barplot to visualize the result as in Fig \ref{fig:barplot1}.
+<<Plot1>>=
+library(reshape2)
+library(ggplot2)
+library(easyGgplot2)
+
+df <- melt(QuantileTable, id.vars = "Quantile")
+colnames(df)[3] <- "Proportion"
+colnames(df)[2] <- "Variance"
+
+ff <- ggplot2.barplot(data=df, xName='Quantile', yName="Proportion", 
+      groupName='Variance', groupColors=c('#66B2FF', '#FFB266', '#FFAAD4'), 
+      position=position_stack(), backgroundColor="white", color="black", 
+      xtitle="Quantile (%)", ytitle="Proportion", mainTitle="", 
+      removePanelGrid=TRUE, removePanelBorder=TRUE, 
+      axisLine=c(0.5, "solid", "black"), ylim = c(0, 1.05), 
+      legendPosition = "top", legendTextFont=c(10, "bold", "black")) 
+@
+
+
+<<fig1, fig.width=4, fig.height=4>>=
+ff
+@
+
+
+\begin{figure}
+\centering
+\includegraphics[width=.4\textwidth]{figure/fig1-1}
+\caption{Decomposition of variance into three components. Genes are evenly divided into ten quantiles based on the sample variance. }
+\label{fig:barplot1}
+\end{figure}
+
+\subsection{Removing cell cycle effect}
+On the same dataset, we can futher remove the cell cycle effect by treating cell cycle genes as control and non cell cycle genes as target. 
+<<Cellcycle>>=
+Expression <- res$Adjusted
+Label <- CellCycleData$Label[CellCycleData$Label != "Spikein"]
+Control <- Expression[, Label == "CellCycle"]
+Target <- Expression[, Label == "NonCellCycle"]
+system.time(res2 <- scPLS(Target, Control, k1 = 2, k2 = 5, iter = 100, 
+             method = "EM", Chunk = FALSE, center = TRUE))
+@
+
+Similarly we can quantify the proportion of variance explained by cell cycle process.
+<<Prop2>>=
+Var <- res2$VarianceSummary
+ConProp <- round(Var['ModelConfounding']/Var['Model'], 3)
+StructuredProp <- round(Var['ModelStructure']/Var['Model'], 3)
+PropTable <- data.frame(ConProp, StructuredProp, 
+                        1 - ConProp - StructuredProp)
+colnames(PropTable) <- c("CellCycle", "Structured", "Residue")
+median(PropTable$CellCycle)
+@
+
+<<plot2>>=
+QuantileTable <- QuantileSummary(PropTable, quantiles = seq(0.1, 1, by = 0.1), 
+                                 rankingby = unlist(Var['Sample']))
+df <- melt(QuantileTable, id.vars = "Quantile")
+colnames(df)[3] <- "Proportion"
+colnames(df)[2] <- "Variance"
+
+ff <- ggplot2.barplot(data=df, xName='Quantile', yName="Proportion", 
+      groupName='Variance', groupColors=c('#66B2FF', '#FFB266', '#FFAAD4'), 
+      position=position_stack(), backgroundColor="white", color="black", 
+      xtitle="Quantile (%)", ytitle="Proportion", mainTitle="", 
+      removePanelGrid=TRUE, removePanelBorder=TRUE, axisLine=c(0.5, "solid", "black"), ylim = c(0, 1.05), 
+      legendPosition = "top", legendTextFont=c(10, "bold", "black")) 
+@
+
+
+<<fig2, fig.width=4, fig.height=4 >>=
+ff
+@
+
+\begin{figure}
+\centering
+\includegraphics[width=.4\textwidth]{figure/fig2-1}
+\caption{Decomposition of variance into three components. Genes are evenly divided into ten quantiles based on the sample variance. }
+\label{fig:barplot2}
+\end{figure}
+
+We can compare the expression of non cell cycle genes in orginal dataset and after removing both technical effect and cell cycle effect.
+
+<<plot3>>=
+celltypes <- gsub("_[^<>]*", "", rownames(CellCycleData$Expression))
+pcs <- prcomp(CellCycleData$Expression[, CellCycleData$Label == "NonCellCycle"], 
+              center = TRUE)		
+PC1 <- pcs$x[, 1]
+PC2 <- pcs$x[, 2]
+df <- data.frame(PC1, PC2, "raw", celltypes)	
+colnames(df) <- c("PC1", "PC2", "Method", "Type")	
+	
+ff1 <- ggplot2.scatterplot(data = df, xName = 'PC1', yName = 'PC2', 
+       groupName = 'Type', size = 5, backgroundColor = "white", 
+       groupColors = c('#66B2FF', '#FFB266', '#FFAAD4'), 
+       xtitle="PC1", ytitle="PC2", mainTitle="Raw", 
+       removePanelGrid=TRUE, removePanelBorder=TRUE,  setShapeByGroupName=TRUE, 
+       showLegend=FALSE, mainTitleFont = c(25, "bold", "black"), 
+       xtitleFont = c(25, "bold", "black"), ytitleFont=c(25, "bold", "black"),
+       xTickLabelFont=c(25, "bold", "black"), yTickLabelFont=c(25, "bold", "black"))  	
+
+pcs <- prcomp(res2$Adjusted, center = TRUE)	
+PC1 <- pcs$x[, 1]
+PC2 <- pcs$x[, 2]
+df <- data.frame(PC1, PC2, "rmcellcyle", celltypes)	
+colnames(df) <- c("PC1", "PC2", "Method", "Type")	
+	
+ff2 <- ggplot2.scatterplot(data = df, xName = 'PC1', yName = 'PC2', groupName = 'Type', size = 5, backgroundColor = "white",  groupColors = c('#66B2FF', '#FFB266', '#FFAAD4'),  xtitle="PC1", ytitle="PC2", mainTitle="Cell cyle effect removed", removePanelGrid=TRUE, removePanelBorder=TRUE,  setShapeByGroupName=TRUE, showLegend=TRUE, mainTitleFont = c(25, "bold", "black"), xtitleFont = c(25, "bold", "black"), ytitleFont=c(25, "bold", "black"), xTickLabelFont=c(25, "bold", "black"), yTickLabelFont=c(25, "bold", "black"), legendTitle="Cell type", legendTitleFont=c(15, "bold", "black"), legendTextFont=c(15, "bold", "black"))   	
+@
+
+
+<<fig3, fig.width=4, fig.height=4 >>=
+ff1
+@
+
+<<fig4, fig.width=5, fig.height=4 >>=
+ff2
+@
+\begin{figure}
+\centering
+\includegraphics[width=.4\textwidth]{figure/fig3-1}
+\includegraphics[width=.5\textwidth]{figure/fig4-1}
+\caption{PCA analysis for the uncorrected data and scPLS corrected data. In the uncorrected data, there is a clear separation of cells by cell-cycle stage. Such separation of cells is no longer observed in the  corrected data.}
+\label{fig:pca}
+\end{figure}
+
+\subsection{Other algorithms}
+\code{scPLS()} also provides other alternative algorithms to estimate the confounding factors.
+Users can select different algorithms by specifying the option \code{method}.
+\code{PCA} algorithm implements the initializer of our EM algorithm. The latent factors are estimated from a Singular Value Decomposition. Details of the algorithm can be found in [].
+Other choices all impose sparsity assumptions on the structured biological factor matrix to improve interpretability. These include ``EMSparse" algorithm, with penalty on sparsity of the factor matrix pre-specified, ``EMSparseTraining" algorithm with penalty on sparsity learned from training samples, ``EMparseNfold" algorithm with penalty on sparsity learned from N fold cross-validation, and ``IBP" algorithm with the sparse factor matrix modeled by an Indian Buffet Process prior.
+
+\end{document}
