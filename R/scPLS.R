@@ -27,12 +27,12 @@
 #' @param kfold: The fold number for cross-validation.
 #' @param Chunk: Whether to use EM-in-chunks algorithm. The default is TRUE.
 #' @param chunk.size: The chunk size (number of genes) for EM-in-chunks algorithm. The default is 1000.        
-
+#' @param epsilon: 
 
 scPLS <- function(Target, Control, k1, k2, iter = 500, alpha = 10, 
                             kappa = 2, diagH = 1, g = 1, h1 = 1, h2 = 1, c = 1, d = 1, limit = 25,
                             method = c("EM", "EMSparse", "EMSparseTraining", "EMSparseNfold", "IBP", "PCA"), 
-                            penalty = seq(0.01, 10, length.out = 20), tol = 0.1, givenpenalty = NULL, kfold = NULL,
+                            penalty = seq(0.01, 10, length.out = 20), tol = 10^-4, givenpenalty = NULL, kfold = NULL,
                             Chunk = TRUE, chunk.size = 1000, center = TRUE) {
   
   Targetmean <- apply(Target, 2, mean)
@@ -40,42 +40,42 @@ scPLS <- function(Target, Control, k1, k2, iter = 500, alpha = 10,
   method <- match.arg(method)
   
   if(center == TRUE){
-    X <- apply(Target, 2, function(z){
+    Y <- apply(Target, 2, function(z){
       z - mean(z)
     }) 
-    Y <- apply(Control, 2, function(z){
+    X <- apply(Control, 2, function(z){
       z - mean(z)
     }) 
   } else {
-    X <- Target
-    Y <- Control
+    Y <- Target
+    X <- Control
   }
   
-  n <- nrow(X)
-  q <- ncol(X)
-  p <- ncol(Y)
+  n <- nrow(Y)
+  q <- ncol(Y)
+  p <- ncol(X)
   
   if (method == "EM") {
     if(Chunk == TRUE & q > chunk.size){
       chunk <- ceiling(q/chunk.size)
-      res <- PLSfactorEMchunk(X, Y, k1, k2, iter, chunk)
+      res <- PLSfactorEMchunk(Y, X, k1, k2, iter, chunk)
     } else {
-      res <- PLSfactorEM(X, Y, k1, k2, iter)
+      res <- PLSfactorEM(Y, X, k1, k2, iter, tol)
     }
     lambda <- res$lambda
     lambdaU <- lambda[(k1+1):(k1+k2), (p+1):(p+q)]
-    lambdaX <- lambda[1:k1, (p+1):(p+q)]
-    lambdaY <- lambda[1:k1, 1:p]
+    lambdaY <- lambda[1:k1, (p+1):(p+q)]
+    lambdaX <- lambda[1:k1, 1:p]
     Z <- as.matrix(res$Z[, 1:k1])
     Q <- as.matrix(res$Z[, (k1+1):(k1+k2)])
     denoised <- Q%*%lambdaU
     
   } else if (method == "EMSparseTraining"){
     
-    res <- PLSfactorEMpenaltyTrain(Y, X, k1, k2, iter, penalty, tol)
+    res <- PLSfactorEMpenaltyTrain(X, Y, k1, k2, iter, penalty, tol)
     lambdaU <- res$lambdaU
-    lambdaX <- res$lambdaX
-    lambdaY <- res$lambdaY
+    lambdaY <- res$lambdaX
+    lambdaX <- res$lambdaY
     Z <- as.matrix(res$Z[, 1:k1])
     Q <- as.matrix(res$Z[, (k1+1):(k1+k2)])
     denoised <- Q%*%lambdaU
@@ -83,10 +83,10 @@ scPLS <- function(Target, Control, k1, k2, iter = 500, alpha = 10,
   } else if (method == "EMSparse"){
     
     if(is.null(givenpenalty)) stop("Method \"EMSparse\" requires the specification of penalty for sparisty.")
-    res <- PLSfactorEMpenaltyGivenPen(Y, X, k1, k2, iter, givenpenalty, tol)
+    res <- PLSfactorEMpenaltyGivenPen(X, Y, k1, k2, iter, givenpenalty, tol)
     lambdaU <- res$lambdaU
-    lambdaX <- res$lambdaX
-    lambdaY <- res$lambdaY
+    lambdaY <- res$lambdaX
+    lambdaX <- res$lambdaY
     Z <- as.matrix(res$Z[, 1:k1])
     Q <- as.matrix(res$Z[, (k1+1):(k1+k2)])
     denoised <- Q%*%lambdaU
@@ -94,10 +94,10 @@ scPLS <- function(Target, Control, k1, k2, iter = 500, alpha = 10,
   } else if (method == "EMSparseNfold"){
    
     if(is.null(kfold)) stop("Method \"EMSparseNfold\" requires the specification of k-fold cross validation.")
-    res <- PLSfactorEMpenaltyNfoldCV(Y, X, k1, k2, iter, kfold, penalty, tol)
+    res <- PLSfactorEMpenaltyNfoldCV(X, Y, k1, k2, iter, kfold, penalty, tol)
     lambdaU <- res$lambdaU
-    lambdaX <- res$lambdaX
-    lambdaY <- res$lambdaY
+    lambdaY <- res$lambdaX
+    lambdaX <- res$lambdaY
     Z <- as.matrix(res$Z[, 1:k1])
     Q <- as.matrix(res$Z[, (k1+1):(k1+k2)])
     denoised <- Q%*%lambdaU
@@ -105,22 +105,22 @@ scPLS <- function(Target, Control, k1, k2, iter = 500, alpha = 10,
   } else if (method == "IBP") {
     
     sigma <- sd(X)/2
-    res <- PLSIBPfactormodel(Y, X, k1, k2, iter, sigma = sigma, alpha = alpha, kappa = kappa, diagH = diagH, 
+    res <- PLSIBPfactormodel(X, Y, k1, k2, iter, sigma = sigma, alpha = alpha, kappa = kappa, diagH = diagH, 
                              g = g, h1 = h1, h2 = h2, c = c, d = d, limit = limit)
     lambdaU <- res$lambdaU
-    lambdaX <- res$lambdaX
-    lambdaY <- res$lambdaY
+    lambdaY <- res$lambdaX
+    lambdaX <- res$lambdaY
     Z <- as.matrix(as.matrix(res$Z))
     Q <- as.matrix(as.matrix(res$Q))
     denoised <- Q%*%lambdaU
     
   } else if (method == "PCA") {
     
-    res <- NaivePCA(X, Y, k1, k2)
+    res <- NaivePCA(Y, X, k1, k2)
     lambda <- res$lambda
     lambdaU <- lambda[(k1+1):(k1+k2), (p+1):(p+q)]
-    lambdaX <- lambda[1:k1, (p+1):(p+q)]
-    lambdaY <- lambda[1:k1, 1:p]
+    lambdaY <- lambda[1:k1, (p+1):(p+q)]
+    lambdaX <- lambda[1:k1, 1:p]
     Z <- as.matrix(res$Z[, 1:k1])
     Q <- as.matrix(res$Z[, (k1+1):(k1+k2)])
     denoised <- Q%*%lambdaU
@@ -128,25 +128,24 @@ scPLS <- function(Target, Control, k1, k2, iter = 500, alpha = 10,
   }
   
   if(method != "PCA"){    
-    E_x <- X - denoised - Z%*%lambdaX
-    psi_x <- res$psi[-(1:p)]
-    psi_x[psi_x < 0.000001] <- 0.000001 
-    Ex_Likelihood <- 0
+    E_y <- Y - denoised - Z%*%lambdaY
+    psi_y <- res$psi[-(1:p)]
+    psi_y[psi_y < 0.000001] <- 0.000001 
+    Ey_Likelihood <- 0
     for(j in 1:q){
-      #if(is.na(sum(dnorm(c(E_x[, j]), 0, psi_x[j], TRUE)))) print(j)
-      Ex_Likelihood <- Ex_Likelihood + sum(dnorm(c(E_x[, j]), 0, psi_x[j], TRUE))
+      Ey_Likelihood <- Ey_Likelihood + sum(dnorm(c(E_y[, j]), 0, psi_y[j], TRUE))
     }
-    report <- list(lambdaU, Q, Ex_Likelihood, Z, lambdaX, lambdaY, psi_x)
-    names(report) <- c("Factor", "Loading", "Ex_Likelihood", "Z", "lambdaX", "lambdaY", "psi_x")
+    report <- list(lambdaU, Q, Ey_Likelihood, Z, lambdaY, lambdaX, psi_y)
+    names(report) <- c("Factor", "Loading", "Likelihood", "Z", "lambdaY", "lambdaX", "psi_y")
     
   } else {
   
-    report <- list(lambdaU, Q, Z, lambdaX, lambdaY)
-    names(report) <- c("Factor", "Loading",  "Z", "lambdaX", "lambdaY")
+    report <- list(lambdaU, Q, Z, lambdaY, lambdaX)
+    names(report) <- c("Factor", "Loading",  "Z", "lambdaY", "lambdaX")
     
   }
   
-  adjusted <- X - report$Z%*%report$lambdaX
+  adjusted <- Y - report$Z%*%report$lambdaY
   report$Method <- method
   if(center == TRUE){
     Adjusted <- apply(adjusted, 1, function(x){ x + Targetmean})
@@ -155,10 +154,10 @@ scPLS <- function(Target, Control, k1, k2, iter = 500, alpha = 10,
     report$Adjusted <- adjusted
   }
   
-  if(is.vector(report$lambdaX)){
-    XX_t <- t(matrix(report$lambdaX, nrow=1))%*%matrix(report$lambdaX, nrow=1)
+  if(is.vector(report$lambdaY)){
+    YY_t <- t(matrix(report$lambdaY, nrow=1))%*%matrix(report$lambdaY, nrow=1)
   } else {
-    XX_t <- t(report$lambdaX)%*%report$lambdaX
+    YY_t <- t(report$lambdaY)%*%report$lambdaY
   }
   if(is.vector(report$Factor)){
     UU_t <- t(matrix(report$Factor, nrow=1))%*%matrix(report$Factor, nrow=1)
@@ -166,20 +165,25 @@ scPLS <- function(Target, Control, k1, k2, iter = 500, alpha = 10,
     UU_t <- t(report$Factor)%*%report$Factor
   }
   
-  Xcomponent <- diag(XX_t)
+  Ycomponent <- diag(YY_t)
   Ucomponent <- diag(UU_t)
   varAll <- apply(Target, 2, var)
-  varCon <- apply(report$Z%*%report$lambdaX, 2, var)
+  varCon <- apply(report$Z%*%report$lambdaY, 2, var)
+  varStr <- apply(report$Loading%*%report$Factor, 2, var)
   if(method != "PCA"){
-    varModel <- Xcomponent + Ucomponent + report$psi_x
+    varModel <- Ycomponent + Ucomponent + report$psi_y
     report$VarianceSummary <- data.frame(Sample = round(varAll, 3), 
                                        SampleConfounding = round(varCon, 3), 
+                                       SampleStructure = round(varStr, 3), 
                                        Model= round(varModel, 3), 
-                                       ModelConfounding = round(Xcomponent, 3))
+                                       ModelConfounding = round(Ycomponent, 3),
+                                       ModelStructure = round(Ucomponent, 3))
   } else {
     report$VarianceSummary <- data.frame(Sample = round(varAll, 3), 
                                          SampleConfounding = round(varCon, 3), 
-                                         ModelConfounding = round(Xcomponent, 3))
+                                         ModelConfounding = round(Ycomponent, 3))
   }
   return(report)
 }
+
+
