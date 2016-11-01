@@ -1,11 +1,19 @@
-PLSMixtureFactorModelSpikein <- function(Expression, Spikein, k1, k2, iniL = 3, TruncateL = 20, 
-                        iter = 1000, maxK = 20, nu0 = 50, r = 0.1, s = 200, alpha = 1, alpha2 = 5,
-                        kappa0 = 1, m = 0.75, g = 1, c = 1, d = 1, kappa = 2, diagH = 1, h1 = 1, h2 = 1, s1 = 1, s2 = 1, 
+PLSMixtureFactorModelSpikein <- function(Expression, Spikein, k1, k2, iniL = 3, ModelZero = FALSE, kappa_int = 1, kappagrid = seq(0.1, 2, by = 0.2),
+                        TruncateL = 20, iter = 1000, maxK = 20, nu0 = 50, r = 0.1, s = 200, alpha = 1, alpha2 = 5,
+                        kappa0 = 1, m = 0.75, g = 1, c = 1, d = 1, kappa_ibp = 2, diagH = 1, h1 = 1, h2 = 1, s1 = 1, s2 = 1, 
                         iter_to_average = 10, method = c("SpikeSlab", "IBP"), mergeCluster = TRUE, mergeN = 5, average_label = TRUE){
   
   method <- match.arg(method)
-  X <- Expression 
-  Y <- Spikein
+  X <- apply(Expression, 2, function(z){
+    z - mean(z)
+  }) 
+  tau1 <- apply(Expression, 2, mean) 
+  
+  Y <- apply(Spikein, 2, function(z){
+    z - mean(z)
+  }) 
+  tau2 <- apply(Spikein, 2, mean) 
+
   sigma <- sd(X)/2
   mu0 <- rep(0, k2)
   Sigma0 <- diag(k2)
@@ -15,18 +23,39 @@ PLSMixtureFactorModelSpikein <- function(Expression, Spikein, k1, k2, iniL = 3, 
   q <- ncol(X)
   p <- ncol(Y)
   
-  if (method == "SpikeSlab") {
-    res <- DirichletSpikePLSModel(Y = Y, X = X, k1 = k1, K = k2, iniL = iniL, TruncateL = TruncateL, 
+  if(ModelZero == TRUE){
+    H <- matrix(0, ncol = ncol(X), nrow = nrow(X))
+    H[Expression == 0] <- 1
+    G <- matrix(0, ncol = ncol(Y), nrow = nrow(Y))
+    G[Spikein == 0] <- 1
+    if (method == "SpikeSlab") {
+      res <- DirichletSpikePLSModelZero(Y = Y, X = X, Hind = H, Gind = G, tau1 = tau1, tau2 = tau2, kappa_int = kappa_int, kappagrid = kappagrid, 
+                                        k1 = k1, K = k2, iniL = iniL, TruncateL = TruncateL, 
                                   iter = iter, nu0 = nu0, sigma = sigma, r = r, s = s, alpha = alpha,
                                   mu0 = mu0, Sigma0 = Sigma0, kappa0 = kappa0, m = m, g = g, 
                                   c = c, d = d, diagH = diagH, h1 = h1, h2 = h2, s1 = s1, s2 = s2, iter_to_average = iter_to_average)
-  } else if (method == "IBP") {
-    res <- DirichletIBPPLSModel(Y = Y, X = X, k1 = k1, K = k2, iniL = iniL, TruncateL = TruncateL, 
+      kappa <- res$kappa
+    } else if (method == "IBP") {
+      res <- DirichletIBPPLSModelZero(Y = Y, X = X, Hind = H, Gind = G, tau1 = tau1, tau2 = tau2, kappa_int = kappa_int, kappagrid = kappagrid, 
+                                k1 = k1, K = k2, iniL = iniL, TruncateL = TruncateL, 
                                 iter = iter, maxK = maxK, nu0 = nu0, sigma = sigma, r = r, s = s, alpha = alpha, 
                                 alpha2 = alpha2, mu0 = mu0, Sigma0 = Sigma0, kappa0 = kappa0, m = m, g = g, 
-                                c = c, d = d, kappa = kappa, diagH = diagH, h1 = h1, h2 = h2, s1 = s1, s2 = s2, iter_to_average = iter_to_average)
+                                c = c, d = d, kappa_ibp = kappa_ibp, diagH = diagH, h1 = h1, h2 = h2, s1 = s1, s2 = s2, iter_to_average = iter_to_average)
+      kappa <- res$kappa
+    }
+  } else {
+    if (method == "SpikeSlab") {
+      res <- DirichletSpikePLSModel(Y = Y, X = X, k1 = k1, K = k2, iniL = iniL, TruncateL = TruncateL, 
+                                    iter = iter, nu0 = nu0, sigma = sigma, r = r, s = s, alpha = alpha,
+                                    mu0 = mu0, Sigma0 = Sigma0, kappa0 = kappa0, m = m, g = g, 
+                                    c = c, d = d, diagH = diagH, h1 = h1, h2 = h2, s1 = s1, s2 = s2, iter_to_average = iter_to_average)
+    } else if (method == "IBP") {
+      res <- DirichletIBPPLSModel(Y = Y, X = X, k1 = k1, K = k2, iniL = iniL, TruncateL = TruncateL, 
+                                  iter = iter, maxK = maxK, nu0 = nu0, sigma = sigma, r = r, s = s, alpha = alpha, 
+                                  alpha2 = alpha2, mu0 = mu0, Sigma0 = Sigma0, kappa0 = kappa0, m = m, g = g, 
+                                  c = c, d = d, kappa = kappa_ibp, diagH = diagH, h1 = h1, h2 = h2, s1 = s1, s2 = s2, iter_to_average = iter_to_average)
+    }
   }
-  
   Q <- res$Q
   
   if(average_label == TRUE){
@@ -110,8 +139,13 @@ PLSMixtureFactorModelSpikein <- function(Expression, Spikein, k1, k2, iniL = 3, 
   adjustRes <- .identifiablityAdjust(res$Q, res$lambdaU)
   Q <- adjustRes[[1]]
   Lambda <- adjustRes[[2]]
-  report <- list(Lambda, Q, ClusterLabel, denoised, Likelihood, MuList, Ex_Likelihood, BeforeMergeClusterLabel)
-  names(report) <- c("SparseFactor", "Loading", "Cluster", "Denoised", "Likelihood", "Mu", "Ex_Likelihood", "ClusterBeforeMerging")
+  if(ModelZero == TRUE){
+    report <- list(Lambda, Q, ClusterLabel, denoised, Likelihood, MuList, Ex_Likelihood, BeforeMergeClusterLabel, kappa)
+    names(report) <- c("SparseFactor", "Loading", "Cluster", "Denoised", "Likelihood", "Mu", "Ex_Likelihood", "ClusterBeforeMerging", "DropoutRate")
+  } else {
+    report <- list(Lambda, Q, ClusterLabel, denoised, Likelihood, MuList, Ex_Likelihood, BeforeMergeClusterLabel)
+    names(report) <- c("SparseFactor", "Loading", "Cluster", "Denoised", "Likelihood", "Mu", "Ex_Likelihood", "ClusterBeforeMerging")
+  }
   class(report) <- "CitrusReport"
   return(report)
 }

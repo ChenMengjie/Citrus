@@ -4,7 +4,7 @@
 FactorAnalysisWithSpikein <- function(Expression, Spikein, k1, k2, iter = 500, alpha = 10, 
                             kappa = 2, diagH = 1, g = 1, h1 = 1, h2 = 1, c = 1, d = 1, limit = 25,
                             method = c("EM", "EMSparse", "EMSparseTraining", "EMSparseNfold", "IBP", "PCA"), 
-                            penalty = seq(0.01, 10, length.out = 20), tol = 0.1, givenpenalty = NULL, kfold = NULL,
+                            penalty = seq(0.01, 10, length.out = 20), tol = 0.001, givenpenalty = NULL, kfold = NULL,
                             Chunk = TRUE, chunk.size = 1000) {
   method <- match.arg(method)
   X <- Expression 
@@ -19,7 +19,7 @@ FactorAnalysisWithSpikein <- function(Expression, Spikein, k1, k2, iter = 500, a
       chunk <- ceiling(q/chunk.size)
       res <- PLSfactorEMchunk(X, Y, k1, k2, iter, chunk)
     } else {
-      res <- PLSfactorEM(X, Y, k1, k2, iter)
+      res <- PLSfactorEM(X, Y, k1, k2, iter, tol)
     }
     lambda <- res$lambda
     lambdaU <- lambda[(k1+1):(k1+k2), (p+1):(p+q)]

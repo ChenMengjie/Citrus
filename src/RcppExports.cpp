@@ -262,6 +262,41 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// DirichletSpikeModelZero
+Rcpp::List DirichletSpikeModelZero(arma::mat X, arma::mat H, arma::vec tau, double kappa_int, arma::vec kappagrid, int K, int iniL, int TruncateL, int iter, int nu0, double sigma, double r, double s, double alpha, arma::rowvec mu0, arma::mat Sigma0, int kappa0, double m, double g, double h, double c, double d, double s1, double s2, int iter_to_average);
+RcppExport SEXP Citrus_DirichletSpikeModelZero(SEXP XSEXP, SEXP HSEXP, SEXP tauSEXP, SEXP kappa_intSEXP, SEXP kappagridSEXP, SEXP KSEXP, SEXP iniLSEXP, SEXP TruncateLSEXP, SEXP iterSEXP, SEXP nu0SEXP, SEXP sigmaSEXP, SEXP rSEXP, SEXP sSEXP, SEXP alphaSEXP, SEXP mu0SEXP, SEXP Sigma0SEXP, SEXP kappa0SEXP, SEXP mSEXP, SEXP gSEXP, SEXP hSEXP, SEXP cSEXP, SEXP dSEXP, SEXP s1SEXP, SEXP s2SEXP, SEXP iter_to_averageSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::mat >::type X(XSEXP);
+    Rcpp::traits::input_parameter< arma::mat >::type H(HSEXP);
+    Rcpp::traits::input_parameter< arma::vec >::type tau(tauSEXP);
+    Rcpp::traits::input_parameter< double >::type kappa_int(kappa_intSEXP);
+    Rcpp::traits::input_parameter< arma::vec >::type kappagrid(kappagridSEXP);
+    Rcpp::traits::input_parameter< int >::type K(KSEXP);
+    Rcpp::traits::input_parameter< int >::type iniL(iniLSEXP);
+    Rcpp::traits::input_parameter< int >::type TruncateL(TruncateLSEXP);
+    Rcpp::traits::input_parameter< int >::type iter(iterSEXP);
+    Rcpp::traits::input_parameter< int >::type nu0(nu0SEXP);
+    Rcpp::traits::input_parameter< double >::type sigma(sigmaSEXP);
+    Rcpp::traits::input_parameter< double >::type r(rSEXP);
+    Rcpp::traits::input_parameter< double >::type s(sSEXP);
+    Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
+    Rcpp::traits::input_parameter< arma::rowvec >::type mu0(mu0SEXP);
+    Rcpp::traits::input_parameter< arma::mat >::type Sigma0(Sigma0SEXP);
+    Rcpp::traits::input_parameter< int >::type kappa0(kappa0SEXP);
+    Rcpp::traits::input_parameter< double >::type m(mSEXP);
+    Rcpp::traits::input_parameter< double >::type g(gSEXP);
+    Rcpp::traits::input_parameter< double >::type h(hSEXP);
+    Rcpp::traits::input_parameter< double >::type c(cSEXP);
+    Rcpp::traits::input_parameter< double >::type d(dSEXP);
+    Rcpp::traits::input_parameter< double >::type s1(s1SEXP);
+    Rcpp::traits::input_parameter< double >::type s2(s2SEXP);
+    Rcpp::traits::input_parameter< int >::type iter_to_average(iter_to_averageSEXP);
+    rcpp_result_gen = Rcpp::wrap(DirichletSpikeModelZero(X, H, tau, kappa_int, kappagrid, K, iniL, TruncateL, iter, nu0, sigma, r, s, alpha, mu0, Sigma0, kappa0, m, g, h, c, d, s1, s2, iter_to_average));
+    return rcpp_result_gen;
+END_RCPP
+}
 // IBPfactormodel
 Rcpp::List IBPfactormodel(arma::mat X, int numk, int iter, double sigma, double alpha, double kappa, double g, double h, double c, double d, int limit);
 RcppExport SEXP Citrus_IBPfactormodel(SEXP XSEXP, SEXP numkSEXP, SEXP iterSEXP, SEXP sigmaSEXP, SEXP alphaSEXP, SEXP kappaSEXP, SEXP gSEXP, SEXP hSEXP, SEXP cSEXP, SEXP dSEXP, SEXP limitSEXP) {
@@ -317,6 +352,44 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// DirichletIBPModelZero
+Rcpp::List DirichletIBPModelZero(arma::mat X, arma::mat H, arma::vec tau, double kappa_int, arma::vec kappagrid, int K, int iniL, int TruncateL, int iter, int maxK, int nu0, double sigma, double r, double s, double alpha, double alpha2, arma::rowvec mu0, arma::mat Sigma0, int kappa0, double m, double g, double h, double c, double d, double kappa_ibp, double s1, double s2, int iter_to_average);
+RcppExport SEXP Citrus_DirichletIBPModelZero(SEXP XSEXP, SEXP HSEXP, SEXP tauSEXP, SEXP kappa_intSEXP, SEXP kappagridSEXP, SEXP KSEXP, SEXP iniLSEXP, SEXP TruncateLSEXP, SEXP iterSEXP, SEXP maxKSEXP, SEXP nu0SEXP, SEXP sigmaSEXP, SEXP rSEXP, SEXP sSEXP, SEXP alphaSEXP, SEXP alpha2SEXP, SEXP mu0SEXP, SEXP Sigma0SEXP, SEXP kappa0SEXP, SEXP mSEXP, SEXP gSEXP, SEXP hSEXP, SEXP cSEXP, SEXP dSEXP, SEXP kappa_ibpSEXP, SEXP s1SEXP, SEXP s2SEXP, SEXP iter_to_averageSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::mat >::type X(XSEXP);
+    Rcpp::traits::input_parameter< arma::mat >::type H(HSEXP);
+    Rcpp::traits::input_parameter< arma::vec >::type tau(tauSEXP);
+    Rcpp::traits::input_parameter< double >::type kappa_int(kappa_intSEXP);
+    Rcpp::traits::input_parameter< arma::vec >::type kappagrid(kappagridSEXP);
+    Rcpp::traits::input_parameter< int >::type K(KSEXP);
+    Rcpp::traits::input_parameter< int >::type iniL(iniLSEXP);
+    Rcpp::traits::input_parameter< int >::type TruncateL(TruncateLSEXP);
+    Rcpp::traits::input_parameter< int >::type iter(iterSEXP);
+    Rcpp::traits::input_parameter< int >::type maxK(maxKSEXP);
+    Rcpp::traits::input_parameter< int >::type nu0(nu0SEXP);
+    Rcpp::traits::input_parameter< double >::type sigma(sigmaSEXP);
+    Rcpp::traits::input_parameter< double >::type r(rSEXP);
+    Rcpp::traits::input_parameter< double >::type s(sSEXP);
+    Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
+    Rcpp::traits::input_parameter< double >::type alpha2(alpha2SEXP);
+    Rcpp::traits::input_parameter< arma::rowvec >::type mu0(mu0SEXP);
+    Rcpp::traits::input_parameter< arma::mat >::type Sigma0(Sigma0SEXP);
+    Rcpp::traits::input_parameter< int >::type kappa0(kappa0SEXP);
+    Rcpp::traits::input_parameter< double >::type m(mSEXP);
+    Rcpp::traits::input_parameter< double >::type g(gSEXP);
+    Rcpp::traits::input_parameter< double >::type h(hSEXP);
+    Rcpp::traits::input_parameter< double >::type c(cSEXP);
+    Rcpp::traits::input_parameter< double >::type d(dSEXP);
+    Rcpp::traits::input_parameter< double >::type kappa_ibp(kappa_ibpSEXP);
+    Rcpp::traits::input_parameter< double >::type s1(s1SEXP);
+    Rcpp::traits::input_parameter< double >::type s2(s2SEXP);
+    Rcpp::traits::input_parameter< int >::type iter_to_average(iter_to_averageSEXP);
+    rcpp_result_gen = Rcpp::wrap(DirichletIBPModelZero(X, H, tau, kappa_int, kappagrid, K, iniL, TruncateL, iter, maxK, nu0, sigma, r, s, alpha, alpha2, mu0, Sigma0, kappa0, m, g, h, c, d, kappa_ibp, s1, s2, iter_to_average));
+    return rcpp_result_gen;
+END_RCPP
+}
 // DirichletSpikePLSModel
 Rcpp::List DirichletSpikePLSModel(arma::mat Y, arma::mat X, int k1, int K, int iniL, int TruncateL, int iter, int nu0, double sigma, double r, double s, double alpha, arma::rowvec mu0, arma::mat Sigma0, int kappa0, double m, double g, double c, double d, double diagH, double h1, double h2, double s1, double s2, int iter_to_average);
 RcppExport SEXP Citrus_DirichletSpikePLSModel(SEXP YSEXP, SEXP XSEXP, SEXP k1SEXP, SEXP KSEXP, SEXP iniLSEXP, SEXP TruncateLSEXP, SEXP iterSEXP, SEXP nu0SEXP, SEXP sigmaSEXP, SEXP rSEXP, SEXP sSEXP, SEXP alphaSEXP, SEXP mu0SEXP, SEXP Sigma0SEXP, SEXP kappa0SEXP, SEXP mSEXP, SEXP gSEXP, SEXP cSEXP, SEXP dSEXP, SEXP diagHSEXP, SEXP h1SEXP, SEXP h2SEXP, SEXP s1SEXP, SEXP s2SEXP, SEXP iter_to_averageSEXP) {
@@ -349,6 +422,47 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type s2(s2SEXP);
     Rcpp::traits::input_parameter< int >::type iter_to_average(iter_to_averageSEXP);
     rcpp_result_gen = Rcpp::wrap(DirichletSpikePLSModel(Y, X, k1, K, iniL, TruncateL, iter, nu0, sigma, r, s, alpha, mu0, Sigma0, kappa0, m, g, c, d, diagH, h1, h2, s1, s2, iter_to_average));
+    return rcpp_result_gen;
+END_RCPP
+}
+// DirichletSpikePLSModelZero
+Rcpp::List DirichletSpikePLSModelZero(arma::mat Y, arma::mat X, arma::mat Hind, arma::mat Gind, arma::vec tau1, arma::vec tau2, double kappa_int, arma::vec kappagrid, int k1, int K, int iniL, int TruncateL, int iter, int nu0, double sigma, double r, double s, double alpha, arma::rowvec mu0, arma::mat Sigma0, int kappa0, double m, double g, double c, double d, double diagH, double h1, double h2, double s1, double s2, int iter_to_average);
+RcppExport SEXP Citrus_DirichletSpikePLSModelZero(SEXP YSEXP, SEXP XSEXP, SEXP HindSEXP, SEXP GindSEXP, SEXP tau1SEXP, SEXP tau2SEXP, SEXP kappa_intSEXP, SEXP kappagridSEXP, SEXP k1SEXP, SEXP KSEXP, SEXP iniLSEXP, SEXP TruncateLSEXP, SEXP iterSEXP, SEXP nu0SEXP, SEXP sigmaSEXP, SEXP rSEXP, SEXP sSEXP, SEXP alphaSEXP, SEXP mu0SEXP, SEXP Sigma0SEXP, SEXP kappa0SEXP, SEXP mSEXP, SEXP gSEXP, SEXP cSEXP, SEXP dSEXP, SEXP diagHSEXP, SEXP h1SEXP, SEXP h2SEXP, SEXP s1SEXP, SEXP s2SEXP, SEXP iter_to_averageSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::mat >::type Y(YSEXP);
+    Rcpp::traits::input_parameter< arma::mat >::type X(XSEXP);
+    Rcpp::traits::input_parameter< arma::mat >::type Hind(HindSEXP);
+    Rcpp::traits::input_parameter< arma::mat >::type Gind(GindSEXP);
+    Rcpp::traits::input_parameter< arma::vec >::type tau1(tau1SEXP);
+    Rcpp::traits::input_parameter< arma::vec >::type tau2(tau2SEXP);
+    Rcpp::traits::input_parameter< double >::type kappa_int(kappa_intSEXP);
+    Rcpp::traits::input_parameter< arma::vec >::type kappagrid(kappagridSEXP);
+    Rcpp::traits::input_parameter< int >::type k1(k1SEXP);
+    Rcpp::traits::input_parameter< int >::type K(KSEXP);
+    Rcpp::traits::input_parameter< int >::type iniL(iniLSEXP);
+    Rcpp::traits::input_parameter< int >::type TruncateL(TruncateLSEXP);
+    Rcpp::traits::input_parameter< int >::type iter(iterSEXP);
+    Rcpp::traits::input_parameter< int >::type nu0(nu0SEXP);
+    Rcpp::traits::input_parameter< double >::type sigma(sigmaSEXP);
+    Rcpp::traits::input_parameter< double >::type r(rSEXP);
+    Rcpp::traits::input_parameter< double >::type s(sSEXP);
+    Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
+    Rcpp::traits::input_parameter< arma::rowvec >::type mu0(mu0SEXP);
+    Rcpp::traits::input_parameter< arma::mat >::type Sigma0(Sigma0SEXP);
+    Rcpp::traits::input_parameter< int >::type kappa0(kappa0SEXP);
+    Rcpp::traits::input_parameter< double >::type m(mSEXP);
+    Rcpp::traits::input_parameter< double >::type g(gSEXP);
+    Rcpp::traits::input_parameter< double >::type c(cSEXP);
+    Rcpp::traits::input_parameter< double >::type d(dSEXP);
+    Rcpp::traits::input_parameter< double >::type diagH(diagHSEXP);
+    Rcpp::traits::input_parameter< double >::type h1(h1SEXP);
+    Rcpp::traits::input_parameter< double >::type h2(h2SEXP);
+    Rcpp::traits::input_parameter< double >::type s1(s1SEXP);
+    Rcpp::traits::input_parameter< double >::type s2(s2SEXP);
+    Rcpp::traits::input_parameter< int >::type iter_to_average(iter_to_averageSEXP);
+    rcpp_result_gen = Rcpp::wrap(DirichletSpikePLSModelZero(Y, X, Hind, Gind, tau1, tau2, kappa_int, kappagrid, k1, K, iniL, TruncateL, iter, nu0, sigma, r, s, alpha, mu0, Sigma0, kappa0, m, g, c, d, diagH, h1, h2, s1, s2, iter_to_average));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -415,6 +529,50 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// DirichletIBPPLSModelZero
+Rcpp::List DirichletIBPPLSModelZero(arma::mat Y, arma::mat X, arma::mat Hind, arma::mat Gind, arma::vec tau1, arma::vec tau2, double kappa_int, arma::vec kappagrid, int k1, int K, int iniL, int TruncateL, int iter, int maxK, int nu0, double sigma, double r, double s, double alpha, double alpha2, arma::rowvec mu0, arma::mat Sigma0, int kappa0, double m, double g, double c, double d, double kappa_ibp, double diagH, double h1, double h2, double s1, double s2, int iter_to_average);
+RcppExport SEXP Citrus_DirichletIBPPLSModelZero(SEXP YSEXP, SEXP XSEXP, SEXP HindSEXP, SEXP GindSEXP, SEXP tau1SEXP, SEXP tau2SEXP, SEXP kappa_intSEXP, SEXP kappagridSEXP, SEXP k1SEXP, SEXP KSEXP, SEXP iniLSEXP, SEXP TruncateLSEXP, SEXP iterSEXP, SEXP maxKSEXP, SEXP nu0SEXP, SEXP sigmaSEXP, SEXP rSEXP, SEXP sSEXP, SEXP alphaSEXP, SEXP alpha2SEXP, SEXP mu0SEXP, SEXP Sigma0SEXP, SEXP kappa0SEXP, SEXP mSEXP, SEXP gSEXP, SEXP cSEXP, SEXP dSEXP, SEXP kappa_ibpSEXP, SEXP diagHSEXP, SEXP h1SEXP, SEXP h2SEXP, SEXP s1SEXP, SEXP s2SEXP, SEXP iter_to_averageSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::mat >::type Y(YSEXP);
+    Rcpp::traits::input_parameter< arma::mat >::type X(XSEXP);
+    Rcpp::traits::input_parameter< arma::mat >::type Hind(HindSEXP);
+    Rcpp::traits::input_parameter< arma::mat >::type Gind(GindSEXP);
+    Rcpp::traits::input_parameter< arma::vec >::type tau1(tau1SEXP);
+    Rcpp::traits::input_parameter< arma::vec >::type tau2(tau2SEXP);
+    Rcpp::traits::input_parameter< double >::type kappa_int(kappa_intSEXP);
+    Rcpp::traits::input_parameter< arma::vec >::type kappagrid(kappagridSEXP);
+    Rcpp::traits::input_parameter< int >::type k1(k1SEXP);
+    Rcpp::traits::input_parameter< int >::type K(KSEXP);
+    Rcpp::traits::input_parameter< int >::type iniL(iniLSEXP);
+    Rcpp::traits::input_parameter< int >::type TruncateL(TruncateLSEXP);
+    Rcpp::traits::input_parameter< int >::type iter(iterSEXP);
+    Rcpp::traits::input_parameter< int >::type maxK(maxKSEXP);
+    Rcpp::traits::input_parameter< int >::type nu0(nu0SEXP);
+    Rcpp::traits::input_parameter< double >::type sigma(sigmaSEXP);
+    Rcpp::traits::input_parameter< double >::type r(rSEXP);
+    Rcpp::traits::input_parameter< double >::type s(sSEXP);
+    Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
+    Rcpp::traits::input_parameter< double >::type alpha2(alpha2SEXP);
+    Rcpp::traits::input_parameter< arma::rowvec >::type mu0(mu0SEXP);
+    Rcpp::traits::input_parameter< arma::mat >::type Sigma0(Sigma0SEXP);
+    Rcpp::traits::input_parameter< int >::type kappa0(kappa0SEXP);
+    Rcpp::traits::input_parameter< double >::type m(mSEXP);
+    Rcpp::traits::input_parameter< double >::type g(gSEXP);
+    Rcpp::traits::input_parameter< double >::type c(cSEXP);
+    Rcpp::traits::input_parameter< double >::type d(dSEXP);
+    Rcpp::traits::input_parameter< double >::type kappa_ibp(kappa_ibpSEXP);
+    Rcpp::traits::input_parameter< double >::type diagH(diagHSEXP);
+    Rcpp::traits::input_parameter< double >::type h1(h1SEXP);
+    Rcpp::traits::input_parameter< double >::type h2(h2SEXP);
+    Rcpp::traits::input_parameter< double >::type s1(s1SEXP);
+    Rcpp::traits::input_parameter< double >::type s2(s2SEXP);
+    Rcpp::traits::input_parameter< int >::type iter_to_average(iter_to_averageSEXP);
+    rcpp_result_gen = Rcpp::wrap(DirichletIBPPLSModelZero(Y, X, Hind, Gind, tau1, tau2, kappa_int, kappagrid, k1, K, iniL, TruncateL, iter, maxK, nu0, sigma, r, s, alpha, alpha2, mu0, Sigma0, kappa0, m, g, c, d, kappa_ibp, diagH, h1, h2, s1, s2, iter_to_average));
+    return rcpp_result_gen;
+END_RCPP
+}
 // factorEM
 Rcpp::List factorEM(arma::mat X, arma::mat Y, int k, int iter);
 RcppExport SEXP Citrus_factorEM(SEXP XSEXP, SEXP YSEXP, SEXP kSEXP, SEXP iterSEXP) {
@@ -430,8 +588,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // PLSfactorEM
-Rcpp::List PLSfactorEM(arma::mat X, arma::mat Y, int k1, int k2, int iter);
-RcppExport SEXP Citrus_PLSfactorEM(SEXP XSEXP, SEXP YSEXP, SEXP k1SEXP, SEXP k2SEXP, SEXP iterSEXP) {
+Rcpp::List PLSfactorEM(arma::mat X, arma::mat Y, int k1, int k2, int iter, double epsilon);
+RcppExport SEXP Citrus_PLSfactorEM(SEXP XSEXP, SEXP YSEXP, SEXP k1SEXP, SEXP k2SEXP, SEXP iterSEXP, SEXP epsilonSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -440,7 +598,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type k1(k1SEXP);
     Rcpp::traits::input_parameter< int >::type k2(k2SEXP);
     Rcpp::traits::input_parameter< int >::type iter(iterSEXP);
-    rcpp_result_gen = Rcpp::wrap(PLSfactorEM(X, Y, k1, k2, iter));
+    Rcpp::traits::input_parameter< double >::type epsilon(epsilonSEXP);
+    rcpp_result_gen = Rcpp::wrap(PLSfactorEM(X, Y, k1, k2, iter, epsilon));
     return rcpp_result_gen;
 END_RCPP
 }

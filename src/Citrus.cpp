@@ -160,10 +160,10 @@ arma::rowvec colmean(arma::mat x) {
 // [[Rcpp::export]]
 
 arma::vec callKmeans(arma::mat x, int k){
-  //Environment myEnv = Environment::global_env();
-  Environment myEnv("package:Citrus");
-  Function mykmeans = myEnv["mykmeans"];
-  return as<NumericVector>(wrap(mykmeans(x, k)));
+  Environment myEnv("package:stats");
+  Function mykmeans = myEnv["kmeans"];
+  Rcpp::List kmeansRes = wrap(mykmeans(x, k));
+  return as<NumericVector>(kmeansRes["cluster"]);
 }
 
 // [[Rcpp::depends("RcppArmadillo")]]
@@ -181,7 +181,7 @@ double Cquantile(arma::vec x, double q) {
 arma::mat fastInverse(arma::mat psi, arma::mat lambda, bool diag) {
   arma::mat psi_inv = psi;
   if(diag == TRUE){
-    psi_inv.diag() = 1/(psi.diag()+0.00000001);
+    psi_inv.diag() = 1/(psi.diag()+0.000001);
   } else {
     psi_inv = inv(psi);
   }
@@ -435,7 +435,7 @@ Rcpp::List DirichletSpikeModel(arma::mat X, int K, int iniL, int TruncateL, int 
     }
     
     // Sample Q_i 
-    psi_x_inv.diag() = 1/(psi_x_vector+0.0001);
+    psi_x_inv.diag() = 1/(psi_x_vector+0.000001);
     arma::mat term_1 = psi_x_inv*lambdaU.t();
     
     for(int i = 0; i < n; ++i) {
@@ -519,8 +519,8 @@ Rcpp::List DirichletSpikeModel(arma::mat X, int K, int iniL, int TruncateL, int 
     
     for(int j = 0; j < q; ++j){
       psi_x_vector(j) = 1/(R::rgamma(g + n/2, 1/(h + sum(vectorise(E_x.col(j)%E_x.col(j)))/2)));
-      if(psi_x_vector(j) < 0.0001){
-        psi_x_vector(j) = 0.0001;
+      if(psi_x_vector(j) < 0.000001){
+        psi_x_vector(j) = 0.000001;
       }
     }
     psi_x.diag() = psi_x_vector;
@@ -564,6 +564,289 @@ Rcpp::List DirichletSpikeModel(arma::mat X, int K, int iniL, int TruncateL, int 
     Rcpp::Named("Sigma") = Sigma,
     Rcpp::Named("sigma") = sigma,
     Rcpp::Named("psi") = psi_x_vector); 
+}
+
+// A clustering model with sparse factors with spike and slab prior
+// model dropout
+
+// [[Rcpp::depends("RcppArmadillo")]]
+// [[Rcpp::export]]
+
+Rcpp::List DirichletSpikeModelZero(arma::mat X, arma::mat H, arma::vec tau, double kappa_int, arma::vec kappagrid, 
+                    int K, int iniL, int TruncateL, int iter, int nu0, double sigma, double r, double s, 
+                    double alpha, arma::rowvec mu0, arma::mat Sigma0, int kappa0, double m, double g, double h, 
+                    double c, double d, double s1, double s2, int iter_to_average){
+  
+  int n = X.n_rows; 
+  int q = X.n_cols;
+  arma::mat U;
+  arma::vec S;
+  arma::mat P;
+  double kappa = kappa_int;
+  int kappan = kappagrid.n_elem;
+  
+  bool SVDsuccess = false;
+  while(SVDsuccess == false) {
+    SVDsuccess = svd(U, S, P, X);
+    if(SVDsuccess == false){
+      X += 1e-4;
+    }
+  }
+  
+  arma::mat matd = arma::zeros<arma::mat>(K, K);
+  matd.diag() = sqrt(S(arma::span(0, K-1)));
+  arma::mat Z_X = U.cols(0, K-1)*matd;
+  arma::mat Q = (Z_X - mean(vectorise(Z_X)))/stddev(vectorise(Z_X));
+  arma::vec C = callKmeans(Q, iniL) - 1; 
+  arma::mat lamU = initialize_lambda(Q, X); 
+  
+  arma::umat a = abs(lamU) > Cquantile(vectorise(abs(lamU)), 0.3);   
+  arma::mat F = arma::conv_to<arma::mat>::from(a);
+  arma::mat lambdaU = F%lamU;
+  
+  arma::mat AveC = arma::zeros<arma::mat>(TruncateL, n); 
+  arma::mat Mu = arma::zeros<arma::mat>(TruncateL, K);  
+  arma::cube Sigma = arma::zeros<arma::cube>(K, K, TruncateL); 
+  arma::vec seqx = arma::zeros<arma::vec>(TruncateL);
+  
+  for(int l = 0; l < iniL; ++l){
+    arma::uvec IDs = find(C == l);
+    Mu.submat(arma::span(l, l), arma::span(0, K-1)) = colmean(Q.rows(IDs));
+    Sigma.slice(l).submat(arma::span(0, K-1), arma::span(0, K-1)) = cov(Q.rows(IDs));
+    seqx(l) = l;
+  }
+  
+  arma::mat diagK = arma::zeros<arma::mat>(K, K);
+  diagK.eye();
+  
+  arma::rowvec vecK = arma::zeros<arma::rowvec>(K);
+  
+  for(int l = iniL; l < TruncateL; ++l){
+    // Rcpp::Rcout << "test2" << std::endl;
+    Mu.submat(arma::span(l, l), arma::span(0, K-1)) = mvrnormArma(vecK, diagK*2);
+    Sigma.slice(l).submat(arma::span(0, K-1), arma::span(0, K-1)) = riwishart(nu0 + K, diagK);
+    seqx(l) = l;
+  }
+  
+  arma::vec probF(2);
+  probF.zeros();
+  arma::vec seqF = arma::zeros<arma::vec>(2);
+  seqF(1) = 1;
+  
+  double sigma2inv = 1/(sigma*sigma);
+  
+  arma::mat psi_x = arma::zeros<arma::mat>(q, q);
+  psi_x.eye();
+  arma::mat psi_x_inv = psi_x;
+  arma::vec psi_x_vector = psi_x.diag();
+  arma::vec prob(TruncateL);
+  prob.zeros();
+  
+  arma::mat E_x = X - Q*lambdaU;
+  arma::vec v = arma::zeros<arma::vec>(TruncateL);
+  arma::vec rho = arma::zeros<arma::vec>(K);
+  
+  for(int i = 0; i < K; ++i){
+    rho(i) = R::rbeta(r*s, s*(1-r));
+  }
+  
+  arma::vec vProd = v;
+  arma::vec vProd_minus = v;
+  
+  for (int kk = 0; kk < iter; ++kk) { 
+    
+    // Sample V_l
+    
+    for(int l = 0; l < TruncateL; ++l) {
+      arma::uvec ID1s = find(C == l);
+      arma::uvec ID2s = find(C > l);
+      if(any(C == l)){
+        v(l) = R::rbeta(1 + ID1s.n_elem, alpha + ID2s.n_elem);
+      } else {
+        v(l) = R::rbeta(1, alpha);
+      }	
+      if(l == 0){
+        vProd_minus(l) = std::log(1-v(l)); 
+        vProd(l) = std::log(v(l)); 
+      } else {
+        vProd_minus(l) = vProd_minus(l-1) + std::log(1-v(l));
+        vProd(l) = vProd_minus(l-1) + std::log(v(l));
+      }
+    }
+    
+    
+    // Sample C_i
+    
+    for(int i = 0; i < n; ++i) {
+      arma::vec likelihood = arma::zeros<arma::vec>(TruncateL);
+      for(int l = 0; l < TruncateL; ++l) {
+        likelihood(l) = vProd(l) + dmvnrmRowArma(Q.row(i), Mu.row(l), Sigma.slice(l), TRUE);
+      }
+      likelihood = likelihood + abs(max(likelihood));
+      likelihood = exp(likelihood);
+      prob = likelihood/sum(likelihood);
+      C(i) = as_scalar(RcppArmadillo::sample(seqx, 1, FALSE, as<NumericVector>(wrap(prob))));
+    }
+    
+    // Sample Q_i 
+    psi_x_inv.diag() = 1/(psi_x_vector+0.000001);
+    arma::mat term_1 = psi_x_inv*lambdaU.t();
+    
+    for(int i = 0; i < n; ++i) {
+      arma::mat inv_Sigma_i = inv(Sigma.slice(C(i)));
+      arma::mat Dinv = inv(lambdaU*term_1 + inv_Sigma_i);
+      arma::mat part_1 = X.row(i)*term_1 + Mu.row(C(i))*inv_Sigma_i;
+      arma::rowvec Wi = part_1*Dinv;
+      Q.row(i) = mvrnormArma(Wi, Dinv);
+    }
+    
+    // Sample Mu_l, Sigma_l 
+    
+    int nl = 0;
+    arma::vec currentL(TruncateL);
+    currentL.zeros();
+    for(int l = 0; l < TruncateL; ++l) {
+      arma::mat sumTerm = arma::zeros<arma::mat>(K, K); 
+      arma::rowvec muBar = arma::zeros<arma::rowvec>(K);
+      if(any(C == l)){
+        currentL(l) = 1;
+        arma::uvec IDs = find(C == l);
+        muBar = colmean(Q.rows(IDs));
+        nl = IDs.n_elem;
+        for(int ii = 0; ii < nl; ii++){
+          arma::rowvec ll = Q.row(IDs(ii)) - muBar;
+          sumTerm = sumTerm + ll.t()*ll;
+        }
+      } 		
+      Sigma.slice(l) = riwishart(nu0 + nl, Sigma0 + sumTerm + kappa0*nl*(muBar - mu0).t()*(muBar - mu0)/(kappa0 + nl));	
+      Mu.row(l) = mvrnormArma((kappa0*mu0 + nl*muBar)/(kappa0 + nl), Sigma.slice(l)/(kappa0 + nl));
+    }	
+    
+    // Rcpp::Rcout << "2" << std::endl;
+    
+    // Sample F    
+    for(int j = 0; j < q; ++j){    
+      
+      arma::mat B = arma::zeros<arma::mat>(n, K);
+      
+      for(int k = 0; k < K; ++k){           
+        
+        for(int i = 0; i < n; ++i){          
+          double QFVsum = 0;
+          for(int l = 0; l < K; ++l){
+            if(l != k){
+              QFVsum = QFVsum + Q(i, l)*lambdaU(l, j);
+            } 
+          }  
+          B(i, k) = X(i, j) - QFVsum;
+        }
+        
+        double sumQB = 0;
+        for(int i = 0; i < n; ++i){
+          sumQB = sumQB + Q(i, k)*B(i, k);
+        }
+        
+        double sumQ2 = as_scalar(Q.col(k).t()*Q.col(k));  
+        double sigmakj = 1/(sumQ2/psi_x_vector(j) + sigma2inv);
+        double mukj = sumQB*sigmakj/psi_x_vector(j);
+        double ratiop = std::log(m*rho(k)/(1 - m*rho(k)));
+        double ratio = 0.5*std::log(sigma2inv*sigmakj) + 0.5*mukj*mukj/sigmakj + ratiop;
+        probF(0) = 1/(std::exp(ratio)+1);
+        probF(1) = 1 - probF(0); 
+        F(k, j) = as_scalar(RcppArmadillo::sample(seqF, 1, FALSE, as<NumericVector>(wrap(probF)))); 
+        if(F(k, j) == 1){
+          lambdaU(k, j) = R::rnorm(mukj, sqrt(sigmakj));
+        } else {
+          lambdaU(k, j) = 0;
+        }
+      }  
+    }
+    // Rcpp::Rcout << sum(vectorise(F)) << std::endl;
+    
+    // Sample rho_k 
+    for(int k = 0; k < K; ++k){ 
+      rho(k) = R::rbeta(r*s + sum(F.row(k)), s*(1-r) + q - sum(F.row(k)));        
+    }    
+    
+    // Sample psi_x 
+    E_x = X - Q*lambdaU;
+    
+    for(int j = 0; j < q; ++j){
+      psi_x_vector(j) = 1/(R::rgamma(g + n/2, 1/(h + sum(vectorise(E_x.col(j)%E_x.col(j)))/2)));
+      if(psi_x_vector(j) < 0.000001){
+        psi_x_vector(j) = 0.000001;
+      }
+    }
+    psi_x.diag() = psi_x_vector;
+    h = R::rgamma(1 + g*q, 1/(1 + sum(1/psi_x_vector)));
+    
+    //Sample sigma
+    sigma2inv = R::rgamma(c + sum(vectorise(F))/2, 1/(d + sum(pow(lambdaU(arma::find(F == 1)), 2))/2));;	
+    sigma = sqrt(1/sigma2inv);
+    
+    d = R::rgamma(1 + K, 1/(1 + sigma2inv*K));		
+    
+    double vProd_minus_add = 0;
+    double counter = 0;
+    for(int l = 0; l < TruncateL; ++l) {
+      if(currentL(l) == 1){
+        vProd_minus_add = vProd_minus_add + std::log(1-v(l));
+        counter = counter + 1;
+      }
+    }
+    
+    // Sample alpha
+    alpha = R::rgamma(s1 + counter, 1/(s2 - vProd_minus_add));	
+    
+    arma::vec kappa_likelihood = arma::zeros<arma::vec>(kappan);
+    
+    // Sample X_ij
+    for(int i = 0; i < n; ++i){
+      for(int j = 0; j < q; ++j){
+        if(H(i, j) == 1){
+          double term_ij = 2*kappa*psi_x_vector(j) + 1;
+          double mu_ij = (as_scalar(Q.row(i)*lambdaU.col(j)) - 2*kappa*psi_x_vector(j)*tau(j))/term_ij ;
+          double sigma_ij = psi_x_vector(j)/term_ij;
+          X(i, j) = R::rnorm(mu_ij, sigma_ij); 
+          
+          // Sample kappa
+          for(int s = 0; s < kappan; ++s){
+            kappa_likelihood(s) = kappa_likelihood(s) - kappagrid(s)*pow(X(i, j) + tau(j), 2);
+          }
+        } else {
+          for(int s = 0; s < kappan; ++s){
+            kappa_likelihood(s) = kappa_likelihood(s) + std::log(1 - exp(- kappagrid(s)*pow(X(i, j) + tau(j), 2)));
+          }
+        }
+        
+      }
+    }
+    
+   kappa_likelihood = kappa_likelihood + abs(max(kappa_likelihood));
+   kappa_likelihood = exp(kappa_likelihood);
+   arma::vec kappa_prob = kappa_likelihood/sum(kappa_likelihood);
+   kappa = as_scalar(RcppArmadillo::sample(kappagrid, 1, FALSE, as<NumericVector>(wrap(kappa_prob))));
+    
+    if(iter - kk <= iter_to_average){
+      for(int i = 0; i < n; ++i) {
+        AveC(C(i), i) = AveC(C(i), i) + 1;
+      }
+    }
+  }
+  
+  AveC = AveC/iter_to_average;   
+  
+  return Rcpp::List::create(
+    Rcpp::Named("Q") = Q,
+    Rcpp::Named("F") = F,
+    Rcpp::Named("C") = C,
+    Rcpp::Named("AveC") = AveC,
+    Rcpp::Named("lambdaU") = lambdaU, 
+    Rcpp::Named("Mu") = Mu,
+    Rcpp::Named("Sigma") = Sigma,
+    Rcpp::Named("sigma") = sigma,
+    Rcpp::Named("psi") = psi_x_vector,
+    Rcpp::Named("kappa") = kappa); 
 }
 
 
@@ -912,7 +1195,7 @@ Rcpp::List IBPfactormodel(arma::mat X, int numk, int iter, double sigma, double 
           arma::mat VAugmented = arma::randn<arma::mat>(knew, q)*sigma;
           arma::mat lambdaUAugmented = FAugmented%VAugmented;
           
-          psi_x_inv.diag() = 1/(psi_x_vector +0.0001);
+          psi_x_inv.diag() = 1/(psi_x_vector +0.000001);
           
           arma::mat term_4 = psi_x_inv*lambdaUAugmented.t();
           
@@ -1038,7 +1321,7 @@ Rcpp::List IBPfactormodel(arma::mat X, int numk, int iter, double sigma, double 
       }
       
       // Sample Q_i 
-      psi_x_inv.diag() = 1/(psi_x_vector +0.0001);
+      psi_x_inv.diag() = 1/(psi_x_vector +0.000001);
       
       //Rcpp::Rcout << activeK << std::endl;
       arma::mat term_7 = psi_x_inv*lambdaUnew.t();
@@ -1067,8 +1350,8 @@ Rcpp::List IBPfactormodel(arma::mat X, int numk, int iter, double sigma, double 
       
       for(int j = 0; j < q; ++j){
         psi_x_vector(j) = 1/(R::rgamma(g + n/2, 1/(h + sum(vectorise(E_x.col(j)%E_x.col(j)))/2)));
-        if(psi_x_vector(j) < 0.0001){
-          psi_x_vector(j) = 0.0001;
+        if(psi_x_vector(j) < 0.000001){
+          psi_x_vector(j) = 0.000001;
         }
       }
       
@@ -1126,6 +1409,409 @@ Rcpp::List IBPfactormodel(arma::mat X, int numk, int iter, double sigma, double 
       Rcpp::Named("sigma") = sigma,
       Rcpp::Named("psi") = psi_x_vector); 
   }
+
+
+//  A mixture factor model using a dirichlet process prior on the number of clusters (mixture components)
+// and an IBP prior on the number of latent factors, also add the modeling of dropout.
+
+// [[Rcpp::depends("RcppArmadillo")]]
+// [[Rcpp::export]]
+
+Rcpp::List DirichletIBPModelZero(arma::mat X, arma::mat H, arma::vec tau, double kappa_int, arma::vec kappagrid, int K, int iniL, int TruncateL, int iter, int maxK, 
+                             int nu0, double sigma, double r, double s, double alpha, double alpha2, 
+                             arma::rowvec mu0, arma::mat Sigma0, int kappa0, double m, double g, double h, 
+                             double c, double d, double kappa_ibp, double s1, double s2, int iter_to_average){
+  int n = X.n_rows; 
+  int q = X.n_cols;
+  arma::mat U;
+  arma::vec S;
+  arma::mat P;
+  svd(U, S, P, X);
+  
+  double kappa = kappa_int;
+  int kappan = kappagrid.n_elem;
+  
+  double har = harmonic(q);
+  
+  arma::mat matd = arma::zeros<arma::mat>(K, K);
+  matd.diag() = sqrt(S(arma::span(0, K-1)));
+  arma::mat Z_X = U.cols(0, K-1)*matd;
+  arma::mat iniQ = (Z_X - mean(vectorise(Z_X)))/stddev(vectorise(Z_X));
+  arma::vec C = callKmeans(iniQ, iniL) - 1; 
+  arma::mat lamU = initialize_lambda(iniQ, X);
+  
+  arma::umat a = abs(lamU) > Cquantile(vectorise(abs(lamU)), 0.3);   
+  arma::mat iniF = arma::conv_to<arma::mat>::from(a);
+  arma::mat inilambdaU = iniF%lamU;
+  arma::mat iniV = inilambdaU;
+  
+  arma::mat AveC = arma::zeros<arma::mat>(TruncateL, n); 
+  arma::mat Mu = arma::zeros<arma::mat>(TruncateL, maxK);  
+  arma::cube Sigma = arma::zeros<arma::cube>(maxK, maxK, TruncateL); 
+  arma::vec seqx = arma::zeros<arma::vec>(TruncateL);
+  
+  for(int l = 0; l < iniL; ++l){
+    arma::uvec IDs = find(C == l);
+    Mu.submat(arma::span(l, l), arma::span(0, K-1)) = colmean(iniQ.rows(IDs));
+    Sigma.slice(l).submat(arma::span(0, K-1), arma::span(0, K-1)) = cov(iniQ.rows(IDs));
+    seqx(l) = l;
+  }
+  
+  arma::mat diagK = arma::eye(K, K);
+  
+  arma::rowvec vecK = arma::zeros<arma::rowvec>(K);
+  
+  for(int l = iniL; l < TruncateL; ++l){
+    
+    Mu.submat(arma::span(l, l), arma::span(0, K-1)) = mvrnormArma(vecK, diagK*2);
+    Sigma.slice(l).submat(arma::span(0, K-1), arma::span(0, K-1)) = riwishart(nu0 + K, diagK);
+    seqx(l) = l;
+  }
+  
+  arma::vec probF(2);
+  probF.zeros();
+  arma::vec seqF = arma::zeros<arma::vec>(2);
+  seqF(1) = 1;
+  
+  double sigma2inv = 1/(sigma*sigma);
+  
+  arma::mat psi_x = arma::eye(q, q);
+  arma::mat psi_x_inv = psi_x;
+  arma::vec psi_x_vector = psi_x.diag();
+  arma::vec prob(TruncateL);
+  prob.zeros();
+  
+  arma::mat E_x = X - iniQ*inilambdaU;
+  arma::vec v = arma::zeros<arma::vec>(TruncateL);
+  
+  arma::vec vProd = v;
+  arma::vec vProd_minus = v;
+  
+  arma::mat recordF = arma::zeros<arma::mat>(maxK, q);
+  arma::mat recordV = arma::zeros<arma::mat>(maxK, q);
+  arma::mat recordlambdaU = arma::zeros<arma::mat>(maxK, q);
+  arma::mat recordQ = arma::zeros<arma::mat>(n, maxK);
+  
+  int activeK = K;
+  recordF.rows(0, activeK-1) = iniF;
+  recordV.rows(0, activeK-1) = iniV;
+  recordlambdaU.rows(0, activeK-1) = inilambdaU;   
+  recordQ.cols(0, activeK - 1) = iniQ;
+  
+  for (int kk = 0; kk < iter; ++kk) { 
+    
+    // Sample F    
+    for(int j = 0; j < q; ++j){    
+      
+      arma::mat F = recordF.rows(0, activeK - 1);
+      arma::mat V = recordV.rows(0, activeK - 1);
+      arma::mat lambdaU = recordlambdaU.rows(0, activeK - 1);
+      arma::mat Q = recordQ.cols(0, activeK - 1);
+      arma::mat B = arma::zeros<arma::mat>(n, activeK);
+      
+      for(int k = 0; k < activeK; ++k){           
+        
+        for(int i = 0; i < n; ++i){          
+          double QFVsum = 0;
+          for(int l = 0; l < activeK; ++l){
+            if(l != k){
+              QFVsum = QFVsum + Q(i, l)*F(l, j)*V(l, j);
+            } 
+          }  
+          B(i, k) = X(i, j) - QFVsum;
+        }
+        
+        double sumQB = 0;
+        for(int i = 0; i < n; ++i){
+          sumQB = sumQB + Q(i, k)*B(i, k);
+        }
+        
+        double sumQ2 = as_scalar(Q.col(k).t()*Q.col(k));  
+        double sigmakj = 1/(sumQ2/psi_x_vector(j) + sigma2inv);
+        double mukj = sumQB*sigmakj/psi_x_vector(j);
+        arma::uvec allselect = find(F.row(k) == 1);
+        int active = 0;
+        if( F(k, j) == 1 ){
+          active = allselect.n_elem - 1;
+        } else {
+          active = allselect.n_elem;
+        }
+        
+        double ratio = 0.5*std::log(sigma2inv*sigmakj) + 0.5*mukj*mukj/sigmakj + logratio(active, q);
+        
+        probF(0) = 1/(std::exp(ratio)+1);
+        probF(1) = 1 - probF(0); 
+        F(k, j) = as_scalar(RcppArmadillo::sample(seqF, 1, FALSE, as<NumericVector>(wrap(probF)))); 
+        
+        if(F(k, j) == 1){
+          V(k, j)  = R::rnorm(mukj, sqrt(sigmakj));
+        } 
+        
+        lambdaU(k, j) = V(k, j)*F(k, j);
+        recordF(k, j) = F(k, j);
+        recordV(k, j) = V(k, j);
+        recordlambdaU(k, j) = lambdaU(k, j); 
+      }  
+      // Generate new features
+      int knew = R::rpois(alpha2/(q-1));
+      
+      if(knew != 0){
+        if(knew + activeK > maxK) break;
+        double ap = 0;
+        if(kappa_ibp == 0){
+          ap = - callpois(knew, alpha2/(q-1), TRUE);
+        } else {
+          ap = callpois(knew, alpha2/(q-1), TRUE) - callpois(knew, kappa_ibp*alpha2/(q-1), TRUE); 
+        }
+        arma::mat FAugmented = arma::zeros<arma::mat>(knew, q);
+        FAugmented.col(j).fill(1);
+        arma::mat VAugmented = arma::randn<arma::mat>(knew, q)*sigma;
+        arma::mat lambdaUAugmented = FAugmented%VAugmented;
+        
+        psi_x_inv.diag() = 1/(psi_x_vector +0.000001);
+        
+        arma::mat term_4 = psi_x_inv*lambdaUAugmented.t();
+        
+        arma::cube H_i = arma::zeros<arma::cube>(knew, knew, TruncateL); 
+        arma::cube G_i_firstterm = arma::zeros<arma::cube>(q, knew, TruncateL); 
+        arma::mat G_i_secondterm = arma::zeros<arma::mat>(TruncateL, knew); 
+        
+        arma::mat H_i_firstterm = lambdaUAugmented*term_4;
+        arma::vec mu_sigma_mu = arma::zeros<arma::vec>(TruncateL);
+        arma::cube Sigma_augmented_list = arma::zeros<arma::cube>(knew, knew, TruncateL);
+        arma::mat Mu_augmented_list = arma::zeros<arma::mat>(TruncateL, knew);
+        
+        
+        for(int l = 0; l < TruncateL; ++l){
+          arma::mat knewI = arma::eye(knew, knew);
+          Sigma_augmented_list.slice(l) = riwishart(knew + nu0, knewI); 
+          Mu_augmented_list.row(l) = mvrnormArma(arma::zeros<arma::rowvec>(knew), Sigma_augmented_list.slice(l)/kappa0);
+          if(any(C==l)){
+            arma::rowvec Mu_augmented = Mu_augmented_list.row(l);
+            arma::mat Sigma_augmented = Sigma_augmented_list.slice(l);
+            arma::mat inv_Sigma_augmented = inv(Sigma_augmented);
+            arma::mat term_2 = Mu_augmented*inv_Sigma_augmented;
+            mu_sigma_mu(l) = as_scalar(term_2*Mu_augmented.t());
+            H_i.slice(l) = H_i_firstterm + inv_Sigma_augmented;
+            arma::mat term_3 = inv(H_i.slice(l));
+            G_i_secondterm.row(l) = term_2*term_3;
+            G_i_firstterm.slice(l) = term_4*term_3; 		     
+          }	
+        }
+        
+        E_x = X - Q*lambdaU;
+        double GHG_sum = 0; 
+        double mu_sigma_mu_sum = 0;
+        double det_H = 0;
+        
+        for(int i = 0; i < n; ++i){ 
+          arma::rowvec gt = E_x.row(i)*G_i_firstterm.slice(C(i)) + G_i_secondterm.row(C(i));
+          GHG_sum = GHG_sum + as_scalar(gt*H_i.slice(C(i))*gt.t());
+          mu_sigma_mu_sum = mu_sigma_mu_sum + mu_sigma_mu(C(i));
+          det_H = det_H + std::log(det(H_i.slice(C(i)))) + log(det(Sigma_augmented_list.slice(C(i))));
+        }					
+        double lratio  = - 0.5*det_H + 0.5*(GHG_sum - mu_sigma_mu_sum) + ap;
+        
+        int kfinal = 0;  
+        if(std::exp(lratio) > 1){
+          kfinal = knew;
+        }   
+        if(kfinal != 0){  
+          int newK = activeK + kfinal;
+          recordF.rows(activeK, newK - 1) = FAugmented;
+          recordV.rows(activeK, newK - 1) = VAugmented;
+          recordlambdaU.rows(activeK, newK - 1) = lambdaUAugmented;		
+          
+          arma::mat Q_alter = arma::zeros<arma::mat>(n, knew);
+          arma::mat term_5 = psi_x_inv*lambdaUAugmented.t();
+          arma::mat D_inv_firstterm = lambdaUAugmented*term_5;
+          
+          for(int i = 0; i < n; ++i){ 
+            arma::mat term_6 = inv(Sigma_augmented_list.slice(C(i)));
+            arma::mat D_inv = inv(D_inv_firstterm + term_6);
+            arma::mat sum_0 = E_x.row(i)*term_5 + Mu_augmented_list.row(C(i))*term_6;
+            arma::rowvec W_i = sum_0*D_inv;
+            Q_alter.row(i) = mvrnormArma(W_i, D_inv);
+          }
+          
+          recordQ.cols(activeK, newK - 1) = Q_alter;
+          Mu.cols(activeK, newK - 1) = Mu_augmented_list;               
+          activeK = newK;
+        }
+      }         
+    }
+    //Rcpp::Rcout << "testf" << std::endl;
+    arma::uvec dseq = reorderMatF(recordF.rows(0, activeK - 1));  
+    arma::mat Fnew = subsetMat(recordF.rows(0, activeK - 1), dseq, TRUE);  
+    arma::mat Vnew = subsetMat(recordV.rows(0, activeK - 1), dseq, TRUE); 
+    arma::mat lambdaUnew = subsetMat(recordlambdaU.rows(0, activeK - 1), dseq, TRUE); 
+    arma::mat Qnew = subsetMat(recordQ.cols(0, activeK - 1), dseq, FALSE);
+    
+    activeK = Fnew.n_rows;
+    
+    arma::mat Munew = arma::zeros<arma::mat>(TruncateL, activeK);
+    arma::cube Sigmanew = arma::zeros<arma::cube>(activeK, activeK, TruncateL); 
+    
+    //Rcpp::Rcout << "test!" << std::endl; 
+    // Sample Mu_l, Sigma_l  
+    int nl = 0;
+    arma::vec currentL(TruncateL);
+    currentL.zeros();
+    for(int l = 0; l < TruncateL; ++l) {
+      arma::mat sumTerm = arma::zeros<arma::mat>(activeK, activeK); 
+      arma::rowvec muBar = arma::zeros<arma::rowvec>(activeK);
+      if(any(C == l)){
+        currentL(l) = 1;
+        arma::uvec IDs = find(C == l);
+        muBar = colmean(Qnew.rows(IDs));
+        nl = IDs.n_elem;
+        for(int ii = 0; ii < nl; ii++){
+          arma::rowvec ll = Qnew.row(IDs(ii)) - muBar;
+          sumTerm = sumTerm + ll.t()*ll;
+        }  
+      }  
+      Sigmanew.slice(l) = riwishart(nu0 + nl, arma::eye(activeK, activeK) + sumTerm + kappa0*nl*muBar.t()*muBar/(kappa0 + nl));  
+      Munew.row(l) = mvrnormArma(nl*muBar/(kappa0 + nl), Sigmanew.slice(l)/(kappa0 + nl)); //mu0 = 0
+    }	
+    
+    // Sample V_l
+    
+    for(int l = 0; l < TruncateL; ++l) {
+      arma::uvec ID1s = find(C == l);
+      arma::uvec ID2s = find(C > l);
+      if(any(C == l)){
+        v(l) = R::rbeta(1 + ID1s.n_elem, alpha + ID2s.n_elem);
+      } else {
+        v(l) = R::rbeta(1, alpha);
+      }	
+      if(l == 0){
+        vProd_minus(l) = std::log(1-v(l)); 
+        vProd(l) = std::log(v(l)); 
+      } else {
+        vProd_minus(l) = vProd_minus(l-1) + std::log(1-v(l));
+        vProd(l) = vProd_minus(l-1) + std::log(v(l));
+      }
+    }
+    
+    // Sample Q_i 
+    psi_x_inv.diag() = 1/(psi_x_vector +0.000001);
+    
+    //Rcpp::Rcout << activeK << std::endl;
+    arma::mat term_7 = psi_x_inv*lambdaUnew.t();
+    for(int i = 0; i < n; ++i) {
+      arma::mat inv_Sigmanew_i = inv(Sigmanew.slice(C(i)));
+      arma::mat Dinv = inv(lambdaUnew*term_7 + inv_Sigmanew_i);
+      arma::mat term_8 = X.row(i)*term_7 + Munew.row(C(i))*inv_Sigmanew_i;
+      arma::rowvec Wi = term_8*Dinv;
+      Qnew.row(i) = mvrnormArma(Wi, Dinv);
+    }
+    
+    // Sample C_i
+    for(int i = 0; i < n; ++i) {
+      arma::vec likelihood = arma::zeros<arma::vec>(TruncateL);
+      for(int l = 0; l < TruncateL; ++l) {
+        likelihood(l) = vProd(l) + dmvnrmRowArma(Qnew.row(i), Munew.row(l), Sigmanew.slice(l), TRUE);
+      }
+      likelihood = likelihood + abs(max(likelihood));
+      likelihood = exp(likelihood);
+      prob = likelihood/sum(likelihood);
+      C(i) = as_scalar(RcppArmadillo::sample(seqx, 1, FALSE, as<NumericVector>(wrap(prob))));
+      
+    }
+    
+    E_x = X - Qnew*lambdaUnew;
+    
+    for(int j = 0; j < q; ++j){
+      psi_x_vector(j) = 1/(R::rgamma(g + n/2, 1/(h + sum(vectorise(E_x.col(j)%E_x.col(j)))/2)));
+      if(psi_x_vector(j) < 0.000001){
+        psi_x_vector(j) = 0.000001;
+      }
+    }
+    
+    psi_x.diag() = psi_x_vector;
+    h = R::rgamma(1 + g*q, 1/(1 + sum(1/psi_x_vector)));
+    
+    //Sample sigma
+    sigma2inv = R::rgamma(c + sum(vectorise(Fnew))/2, 1/(d + sum(pow(lambdaUnew(arma::find(Fnew == 1)), 2))/2));	
+    sigma = sqrt(1/sigma2inv);
+    
+    d = R::rgamma(1 + activeK, 1/(1 + sigma2inv*activeK));		
+    
+    double vProd_minus_add = 0;
+    double counter = 0;
+    for(int l = 0; l < TruncateL; ++l) {
+      if(currentL(l) == 1){
+        vProd_minus_add = vProd_minus_add + std::log(1-v(l));
+        counter = counter + 1;
+      }
+    }
+    
+    // Sample alpha
+    alpha = R::rgamma(s1 + counter, 1/(s2 - vProd_minus_add));	
+    
+    // Sample alpha2 
+    alpha2 = R::rgamma(1 + activeK, 1/(1 + har));
+    
+    recordF.rows(0, activeK-1) = Fnew;
+    recordV.rows(0, activeK-1) = Vnew;
+    recordlambdaU.rows(0, activeK-1) = lambdaUnew;   
+    recordQ.cols(0, activeK-1) = Qnew; 
+    Mu.cols(0, activeK-1) = Munew; 
+    
+    for(int l = 0; l < TruncateL; ++l){
+      Sigma.slice(l).submat(arma::span(0, activeK-1), arma::span(0, activeK-1)) = Sigmanew.slice(l);
+    }
+    
+    arma::vec kappa_likelihood = arma::zeros<arma::vec>(kappan);
+    
+    // Sample X_ij
+    for(int i = 0; i < n; ++i){
+      for(int j = 0; j < q; ++j){
+        if(H(i, j) == 1){
+          double term_ij = 2*kappa*psi_x_vector(j) + 1;
+          double mu_ij = (as_scalar(Qnew.row(i)*lambdaUnew.col(j)) - 2*kappa*psi_x_vector(j)*tau(j))/term_ij ;
+          double sigma_ij = psi_x_vector(j)/term_ij;
+          X(i, j) = R::rnorm(mu_ij, sigma_ij); 
+          
+          // Sample kappa
+          for(int s = 0; s < kappan; ++s){
+            kappa_likelihood(s) = kappa_likelihood(s) - kappagrid(s)*pow(X(i, j) + tau(j), 2);
+          }
+        } else {
+          for(int s = 0; s < kappan; ++s){
+            kappa_likelihood(s) = kappa_likelihood(s) + std::log(1 - exp(- kappagrid(s)*pow(X(i, j) + tau(j), 2)));
+          }
+        }
+        
+      }
+    }
+    
+    kappa_likelihood = kappa_likelihood + abs(max(kappa_likelihood));
+    kappa_likelihood = exp(kappa_likelihood);
+    arma::vec kappa_prob = kappa_likelihood/sum(kappa_likelihood);
+    kappa = as_scalar(RcppArmadillo::sample(kappagrid, 1, FALSE, as<NumericVector>(wrap(kappa_prob))));
+    
+    if(iter - kk <= iter_to_average){
+      for(int i = 0; i < n; ++i) {
+        AveC(C(i), i) = AveC(C(i), i) + 1;
+      }
+    }
+  }    
+  
+  AveC = AveC/iter_to_average;   
+  
+  return Rcpp::List::create(
+    Rcpp::Named("Q") = recordQ.cols(0, activeK-1),
+    Rcpp::Named("F") = recordF.rows(0, activeK-1),
+    Rcpp::Named("C") = C,
+    Rcpp::Named("AveC") = AveC,
+    Rcpp::Named("lambdaU") = recordlambdaU.rows(0, activeK-1),
+    Rcpp::Named("Mu") = Mu,
+    Rcpp::Named("Sigma") = Sigma,
+    Rcpp::Named("sigma") = sigma,
+    Rcpp::Named("psi") = psi_x_vector,
+    Rcpp::Named("kappa") = kappa); 
+}
 
 
 // Using a partial least square framework to model ERCC spike-in
@@ -1311,7 +1997,7 @@ Rcpp::List DirichletSpikePLSModel(arma::mat Y, arma::mat X, int k1, int K, int i
       
       // Sample Q_i 
       A = X - Z*lambdaX;
-      psi_x_inv.diag() = 1/(psi_x_vector +0.0001);
+      psi_x_inv.diag() = 1/(psi_x_vector +0.000001);
       
       arma::mat term_1 = psi_x_inv*lambdaU.t();
       
@@ -1397,8 +2083,8 @@ Rcpp::List DirichletSpikePLSModel(arma::mat Y, arma::mat X, int k1, int K, int i
       E_y = Y - Z*lambdaY;
       for(int j = 0; j < p; ++j){
         psi_y_vector(j) = 1/(R::rgamma(g + n/2, 1/(h1 + sum(vectorise(E_y.col(j)%E_y.col(j)))/2)));
-        if(psi_y_vector(j) < 0.0001){
-          psi_y_vector(j) = 0.0001;
+        if(psi_y_vector(j) < 0.000001){
+          psi_y_vector(j) = 0.000001;
         }
       }
       psi_y.diag() = psi_y_vector;
@@ -1408,8 +2094,8 @@ Rcpp::List DirichletSpikePLSModel(arma::mat Y, arma::mat X, int k1, int K, int i
       //Rcpp::Rcout << sum(vectorise(E_x.t()*E_x)) << std::endl;
       for(int j = 0; j < q; ++j){
         psi_x_vector(j) = 1/(R::rgamma(g + n/2, 1/(h2 + sum(vectorise(E_x.col(j)%E_x.col(j)))/2)));
-        if(psi_x_vector(j) < 0.0001){
-          psi_x_vector(j) = 0.0001;
+        if(psi_x_vector(j) < 0.000001){
+          psi_x_vector(j) = 0.000001;
         }
       }
       psi_x.diag() = psi_x_vector;
@@ -1457,6 +2143,397 @@ Rcpp::List DirichletSpikePLSModel(arma::mat Y, arma::mat X, int k1, int K, int i
       Rcpp::Named("sigma") = sigma,
       Rcpp::Named("psi") = join_cols(psi_y_vector, psi_x_vector)); 
   }
+
+
+
+// Using a partial least square framework to model ERCC spike-in
+// A mixture factor model on rows using a dirichlet process prior 
+// with unknown number of clusters and a fixed number of factors
+
+// [[Rcpp::depends("RcppArmadillo")]]
+// [[Rcpp::export]]
+
+Rcpp::List DirichletSpikePLSModelZero(arma::mat Y, arma::mat X, arma::mat Hind, arma::mat Gind, arma::vec tau1, arma::vec tau2, 
+                                  double kappa_int, arma::vec kappagrid, int k1, int K, int iniL, int TruncateL, 
+                                  int iter, int nu0, double sigma, double r, double s, double alpha, 
+                                  arma::rowvec mu0, arma::mat Sigma0, int kappa0, double m, double g, 
+                                  double c, double d, double diagH, double h1, double h2, 
+                                  double s1, double s2, int iter_to_average){
+  
+  // initialization 
+  arma::mat U1;
+  arma::vec S1;
+  arma::mat V1;
+  
+  bool SVD1success = false;
+  while(SVD1success == false) {
+    SVD1success = svd(U1, S1, V1, Y);
+    if(SVD1success == false){
+      Y += 1e-4;
+    }
+  }
+  
+  int p = Y.n_cols;
+  int n = X.n_rows; 
+  int q = X.n_cols;
+  
+  double kappa = kappa_int;
+  int kappan = kappagrid.n_elem;
+  
+  arma::mat matd1 = arma::zeros<arma::mat>(k1, k1);
+  matd1.diag() = sqrt(S1(arma::span(0, k1-1)));
+  arma::mat Z_Y = U1.cols(0, k1-1)*matd1;
+  arma::mat Z_Y_norm = (Z_Y - mean(vectorise(Z_Y)))/stddev(vectorise(Z_Y));
+  arma::mat lambdaY = initialize_lambda(Z_Y_norm, Y);
+  arma::mat lambdaX = initialize_lambda(Z_Y_norm, X); 
+  arma::mat res_x = X - Z_Y_norm*lambdaX;
+  
+  arma::mat U;
+  arma::vec S;
+  arma::mat P;
+  
+  bool SVD2success = false;
+  while(SVD2success == false) {
+    SVD2success = svd(U, S, P, res_x);
+    if(SVD2success == false){
+      res_x += 1e-4;
+    }
+  }
+  
+  arma::mat matd = arma::zeros<arma::mat>(K, K);
+  matd.diag() = sqrt(S(arma::span(0, K-1)));
+  arma::mat Z_X = U.cols(0, K-1)*matd;
+  arma::mat Q = (Z_X - mean(vectorise(Z_X)))/stddev(vectorise(Z_X));
+  arma::vec C = callKmeans(Q, iniL) - 1; 
+  arma::mat lamU = initialize_lambda(Q, res_x);
+  
+  arma::umat a = abs(lamU) > Cquantile(vectorise(abs(lamU)), 0.3);   
+  arma::mat F = arma::conv_to<arma::mat>::from(a);
+  arma::mat lambdaU = F%lamU;
+  
+  arma::mat AveC = arma::zeros<arma::mat>(TruncateL, n); 
+  arma::mat Mu = arma::zeros<arma::mat>(TruncateL, K);  
+  arma::cube Sigma = arma::zeros<arma::cube>(K, K, TruncateL); 
+  arma::vec seqx = arma::zeros<arma::vec>(TruncateL);
+  
+  for(int l = 0; l < iniL; ++l){
+    arma::uvec IDs = find(C == l);
+    Mu.submat(arma::span(l, l), arma::span(0, K-1)) = colmean(Q.rows(IDs));
+    Sigma.slice(l).submat(arma::span(0, K-1), arma::span(0, K-1)) = cov(Q.rows(IDs));
+    seqx(l) = l;
+  }
+  
+  arma::mat diagK = arma::eye(K, K);
+  
+  arma::rowvec vecK = arma::zeros<arma::rowvec>(K);
+  
+  for(int l = iniL; l < TruncateL; ++l){
+    Mu.submat(arma::span(l, l), arma::span(0, K-1)) = mvrnormArma(vecK, diagK*2);
+    Sigma.slice(l).submat(arma::span(0, K-1), arma::span(0, K-1)) = riwishart(nu0, diagK);
+    seqx(l) = l;
+  }
+  
+  arma::vec probF(2);
+  probF.zeros();
+  arma::vec seqF = arma::zeros<arma::vec>(2);
+  seqF(1) = 1;
+  
+  double sigma2inv = 1/(sigma*sigma);
+  
+  arma::mat k1I = arma::eye(k1, k1);
+  
+  arma::mat psi_x = arma::eye(q, q);
+  arma::mat psi_x_inv = psi_x;
+  arma::vec psi_x_vector = psi_x.diag();
+  
+  arma::mat psi_y = arma::eye(p, p);
+  arma::vec psi_y_vector = psi_y.diag();
+  
+  arma::mat psi = arma::eye(p+q, p+q);
+  
+  arma::mat H = arma::zeros<arma::mat>(k1, k1);
+  H.diag().fill(diagH);
+  
+  arma::vec prob(TruncateL);
+  prob.zeros();
+  
+  arma::mat Z = Z_Y_norm;
+  arma::mat lambda = join_rows(lambdaY, lambdaX);
+  arma::mat E_y = Y - Z*lambdaY;
+  arma::mat E_x = X - Z*lambdaX - Q*lambdaU;
+  
+  arma::mat W = join_rows(Y, X - Q*lambdaU);
+  arma::mat A = X - Z*lambdaX;
+  
+  arma::vec v = arma::zeros<arma::vec>(TruncateL);
+  arma::vec rho = arma::zeros<arma::vec>(K);
+  
+  for(int i = 0; i < K; ++i){
+    rho(i) = R::rbeta(r*s, s*(1-r));
+  }
+  
+  arma::vec vProd = v;
+  arma::vec vProd_minus = v;
+  
+  for (int kk = 0; kk < iter; ++kk) { 
+    
+    // Sample V_l
+    
+    for(int l = 0; l < TruncateL; ++l) {
+      arma::uvec ID1s = find(C == l);
+      arma::uvec ID2s = find(C > l);
+      if(any(C == l)){
+        v(l) = R::rbeta(1 + ID1s.n_elem, alpha + ID2s.n_elem);
+      } else {
+        v(l) = R::rbeta(1, alpha);
+      }	
+      if(l == 0){
+        vProd_minus(l) = std::log(1-v(l)); 
+        vProd(l) = std::log(v(l)); 
+      } else {
+        vProd_minus(l) = vProd_minus(l-1) + std::log(1-v(l));
+        vProd(l) = vProd_minus(l-1) + std::log(v(l));
+      }
+    }
+    
+    // Sample Mu_l, Sigma_l 
+    
+    int nl = 0;
+    arma::vec currentL(TruncateL);
+    currentL.zeros();
+    for(int l = 0; l < TruncateL; ++l) {
+      arma::mat sumTerm = arma::zeros<arma::mat>(K, K); 
+      arma::rowvec muBar = arma::zeros<arma::rowvec>(K);
+      if(any(C == l)){
+        currentL(l) = 1;
+        arma::uvec IDs = find(C == l);
+        muBar = colmean(Q.rows(IDs));
+        nl = IDs.n_elem;
+        for(int ii = 0; ii < nl; ii++){
+          arma::rowvec ll = Q.row(IDs(ii)) - muBar;
+          sumTerm = sumTerm + ll.t()*ll;
+        }
+      } 		
+      Sigma.slice(l) = riwishart(nu0 + nl, Sigma0 + sumTerm + kappa0*nl*(muBar - mu0).t()*(muBar - mu0)/(kappa0 + nl));	
+      Mu.row(l) = mvrnormArma((kappa0*mu0 + nl*muBar)/(kappa0 + nl), Sigma.slice(l)/(kappa0 + nl));
+    }	  
+    
+    // Sample C_i
+    
+    for(int i = 0; i < n; ++i) {
+      arma::vec likelihood = arma::zeros<arma::vec>(TruncateL);
+      for(int l = 0; l < TruncateL; ++l) {
+        likelihood(l) = vProd(l) + dmvnrmRowArma(Q.row(i), Mu.row(l), Sigma.slice(l), TRUE);
+      }
+      likelihood = likelihood + abs(max(likelihood));
+      likelihood = exp(likelihood);
+      prob = likelihood/sum(likelihood);
+      C(i) = as_scalar(RcppArmadillo::sample(seqx, 1, FALSE, as<NumericVector>(wrap(prob))));
+    }
+    
+    // Sample Q_i 
+    A = X - Z*lambdaX;
+    psi_x_inv.diag() = 1/(psi_x_vector +0.000001);
+    
+    arma::mat term_1 = psi_x_inv*lambdaU.t();
+    
+    for(int i = 0; i < n; ++i) {
+      arma::mat inv_Sigma_i = inv(Sigma.slice(C(i)));
+      arma::mat Dinv = inv(lambdaU*term_1 + inv_Sigma_i);
+      arma::mat sum_0 = A.row(i)*term_1 + Mu.row(C(i))*inv_Sigma_i;
+      arma::rowvec Wi = sum_0*Dinv;
+      Q.row(i) = mvrnormArma(Wi, Dinv);
+    }
+    
+    // Sample F    
+    A = X - Z*lambdaX; 
+    
+    for(int j = 0; j < q; ++j){    
+      
+      arma::mat B = arma::zeros<arma::mat>(n, K);
+      
+      for(int k = 0; k < K; ++k){           
+        
+        for(int i = 0; i < n; ++i){          
+          double QFVsum = 0;
+          for(int l = 0; l < K; ++l){
+            if(l != k){
+              QFVsum = QFVsum + Q(i, l)*lambdaU(l, j);
+            } 
+          }  
+          B(i, k) = A(i, j) - QFVsum;
+        }
+        
+        double sumQB = 0;
+        for(int i = 0; i < n; ++i){
+          sumQB = sumQB + Q(i, k)*B(i, k);
+        }
+        
+        double sumQ2 = as_scalar(Q.col(k).t()*Q.col(k));  
+        double sigmakj = 1/(sumQ2/psi_x_vector(j) + sigma2inv);
+        double mukj = sumQB*sigmakj/psi_x_vector(j);
+        double ratiop = std::log(m*rho(k)/(1 - m*rho(k)));
+        double ratio = 0.5*std::log(sigma2inv*sigmakj) + 0.5*mukj*mukj/sigmakj + ratiop;
+        probF(0) = 1/(std::exp(ratio)+1);
+        probF(1) = 1 - probF(0); 
+        F(k, j) = as_scalar(RcppArmadillo::sample(seqF, 1, FALSE, as<NumericVector>(wrap(probF)))); 
+        if(F(k, j) == 1){
+          lambdaU(k, j) = R::rnorm(mukj, sqrt(sigmakj));
+        } else {
+          lambdaU(k, j) = 0;
+        }
+      }  
+    }
+    
+    // Sample rho_k 
+    for(int k = 0; k < K; ++k){ 
+      rho(k) = R::rbeta(r*s + sum(F.row(k)), s*(1-r) + q - sum(F.row(k)));        
+    }    
+    
+    //  Sample Z 
+    W = join_rows(Y, X - Q*lambdaU);
+    arma::mat sharedterm2 = fastInverse(psi, lambda, TRUE);
+    arma::mat term_2 = lambda*sharedterm2;
+    arma::mat E_Z_w = (term_2*W.t()).t();
+    arma::mat Var_Z_w = k1I - term_2*lambda.t();
+    for(int i = 0; i < n; ++i){
+      Z.row(i) = mvrnormArma(E_Z_w.row(i), Var_Z_w);
+    }
+    
+    arma::mat sharedHterm = fastInverse(H, Z, TRUE);
+    
+    // Sample lambdaY 
+    arma::mat term_3 = Y.t()*Z; 
+    arma::mat term_4 = term_3*sharedHterm;
+    lambdaY = sampleFromMND(k1, p, term_4.t(), sharedHterm, psi_y);
+    
+    // Sample lambda_x
+    arma::mat term_5 = (X - Q*lambdaU).t();
+    arma::mat term_6 = Z*sharedHterm;
+    arma::mat term_7 = term_5*term_6;
+    lambdaX = sampleFromMND(k1, q, term_7.t(), sharedHterm, psi_x);
+    
+    lambda = join_rows(lambdaY, lambdaX);
+    
+    // Sample psi_y, psi_x 
+    E_y = Y - Z*lambdaY;
+    for(int j = 0; j < p; ++j){
+      psi_y_vector(j) = 1/(R::rgamma(g + n/2, 1/(h1 + sum(vectorise(E_y.col(j)%E_y.col(j)))/2)));
+      if(psi_y_vector(j) < 0.000001){
+        psi_y_vector(j) = 0.000001;
+      }
+    }
+    psi_y.diag() = psi_y_vector;
+    h1 = R::rgamma(1 + g*p, 1/(1 + sum(1/psi_y_vector)));
+    
+    E_x = X - Z*lambdaX - Q*lambdaU;
+    //Rcpp::Rcout << sum(vectorise(E_x.t()*E_x)) << std::endl;
+    for(int j = 0; j < q; ++j){
+      psi_x_vector(j) = 1/(R::rgamma(g + n/2, 1/(h2 + sum(vectorise(E_x.col(j)%E_x.col(j)))/2)));
+      if(psi_x_vector(j) < 0.000001){
+        psi_x_vector(j) = 0.000001;
+      }
+    }
+    psi_x.diag() = psi_x_vector;
+    h2 = R::rgamma(1 + g*q, 1/(1 + sum(1/psi_x_vector)));
+    
+    psi.diag() = join_cols(psi_y_vector, psi_x_vector);
+    
+    //Sample sigma
+    sigma2inv = R::rgamma(c + sum(vectorise(F))/2, 1/(d + sum(pow(lambdaU(arma::find(F == 1)), 2))/2));	
+    sigma = sqrt(1/sigma2inv);
+    d = R::rgamma(1 + K, 1/(1 + sigma2inv*K));		
+    
+    double vProd_minus_add = 0;
+    double counter = 0;
+    for(int l = 0; l < TruncateL; ++l) {
+      if(currentL(l) == 1){
+        vProd_minus_add = vProd_minus_add + std::log(1-v(l));
+        counter = counter + 1;
+      }
+    }
+    
+    // Sample alpha
+    alpha = R::rgamma(s1 + counter, 1/(s2 - vProd_minus_add));	
+    
+    
+    arma::vec kappa_likelihood = arma::zeros<arma::vec>(kappan);
+    
+    // Sample X_ij
+    for(int i = 0; i < n; ++i){
+      for(int j = 0; j < q; ++j){
+        if(Hind(i, j) == 1){
+          double term_ij = 2*kappa*psi_x_vector(j) + 1;
+          double mu_ij = (as_scalar(Q.row(i)*lambdaU.col(j)) + as_scalar(Z.row(i)*lambdaX.col(j)) 
+                            - 2*kappa*psi_x_vector(j)*tau1(j))/term_ij ;
+          double sigma_ij = psi_x_vector(j)/term_ij;
+          X(i, j) = R::rnorm(mu_ij, sigma_ij); 
+          
+          // Sample kappa
+          for(int s = 0; s < kappan; ++s){
+            kappa_likelihood(s) = kappa_likelihood(s) - kappagrid(s)*pow(X(i, j) + tau1(j), 2);
+          }
+        } else {
+          for(int s = 0; s < kappan; ++s){
+            kappa_likelihood(s) = kappa_likelihood(s) + std::log(1 - exp(- kappagrid(s)*pow(X(i, j) + tau1(j), 2)));
+          }
+        }
+        
+      }
+    }
+    
+    // Sample Y_ij
+    for(int i = 0; i < n; ++i){
+      for(int j = 0; j < p; ++j){
+        if(Gind(i, j) == 1){
+          double term_ij = 2*kappa*psi_y_vector(j) + 1;
+          double mu_ij = (as_scalar(Z.row(i)*lambdaY.col(j)) 
+                            - 2*kappa*psi_y_vector(j)*tau2(j))/term_ij ;
+          double sigma_ij = psi_y_vector(j)/term_ij;
+          Y(i, j) = R::rnorm(mu_ij, sigma_ij); 
+          
+          // Sample kappa
+          for(int s = 0; s < kappan; ++s){
+            kappa_likelihood(s) = kappa_likelihood(s) - kappagrid(s)*pow(Y(i, j) + tau2(j), 2);
+          }
+        } else {
+          for(int s = 0; s < kappan; ++s){
+            kappa_likelihood(s) = kappa_likelihood(s) + std::log(1 - exp(- kappagrid(s)*pow(Y(i, j) + tau2(j), 2)));
+          }
+        }
+        
+      }
+    }
+    
+    kappa_likelihood = kappa_likelihood + abs(max(kappa_likelihood));
+    kappa_likelihood = exp(kappa_likelihood);
+    arma::vec kappa_prob = kappa_likelihood/sum(kappa_likelihood);
+    kappa = as_scalar(RcppArmadillo::sample(kappagrid, 1, FALSE, as<NumericVector>(wrap(kappa_prob))));
+    
+    if(iter - kk <= iter_to_average){
+      for(int i = 0; i < n; ++i) {
+        AveC(C(i), i) = AveC(C(i), i) + 1;
+      }
+    }
+  }    
+  
+  AveC = AveC/iter_to_average;
+  
+  return Rcpp::List::create(
+    Rcpp::Named("Q") = Q,
+    Rcpp::Named("F") = F,
+    Rcpp::Named("C") = C,
+    Rcpp::Named("AveC") = AveC,
+    Rcpp::Named("Z") = Z,
+    Rcpp::Named("lambdaX") = lambdaX,
+    Rcpp::Named("lambdaY") = lambdaY,
+    Rcpp::Named("lambdaU") = lambdaU, 
+    Rcpp::Named("Mu") = Mu,
+    Rcpp::Named("Sigma") = Sigma,
+    Rcpp::Named("sigma") = sigma,
+    Rcpp::Named("psi") = join_cols(psi_y_vector, psi_x_vector),
+    Rcpp::Named("kappa") = kappa); 
+}
 
 
 // Using a partial least square framework to model ERCC spike-in
@@ -1649,8 +2726,8 @@ Rcpp::List PLSIBPfactormodel(arma::mat Y, arma::mat X, int k1, int k2, int iter,
     arma::mat Var_Z_w = k1I - term_4*lambda.t();
     for(int i = 0; i < k1; i++){ 
       for(int j = 0; j < k1; j++){ 
-        if(Var_Z_w(i, j) < 0.0001){
-          Var_Z_w(i, j) = 0.0001;
+        if(Var_Z_w(i, j) < 0.000001){
+          Var_Z_w(i, j) = 0.000001;
         }
       }
     }
@@ -1676,8 +2753,8 @@ Rcpp::List PLSIBPfactormodel(arma::mat Y, arma::mat X, int k1, int k2, int iter,
     E_y = Y - Z*lambdaY;
 	  for(int j = 0; j < p; ++j){
       psi_y_vector(j) = 1/(R::rgamma(g + n/2, 1/(h1 + sum(vectorise(E_y.col(j)%E_y.col(j)))/2)));
-      if(psi_y_vector(j) < 0.0001){
-        psi_y_vector(j) = 0.0001;
+      if(psi_y_vector(j) < 0.000001){
+        psi_y_vector(j) = 0.000001;
       }
 	  }
 	  psi_y.diag() = psi_y_vector;
@@ -1687,8 +2764,8 @@ Rcpp::List PLSIBPfactormodel(arma::mat Y, arma::mat X, int k1, int k2, int iter,
     //Rcpp::Rcout << sum(vectorise(E_x.t()*E_x)) << std::endl;
     for(int j = 0; j < q; ++j){
       psi_x_vector(j) = 1/(R::rgamma(g + n/2, 1/(h2 + sum(vectorise(E_x.col(j)%E_x.col(j)))/2)));
-      if(psi_x_vector(j) < 0.0001){
-        psi_x_vector(j) = 0.0001;
+      if(psi_x_vector(j) < 0.000001){
+        psi_x_vector(j) = 0.000001;
       }
 	  }
 	  psi_x.diag() = psi_x_vector;
@@ -1726,10 +2803,10 @@ Rcpp::List PLSIBPfactormodel(arma::mat Y, arma::mat X, int k1, int k2, int iter,
 // A mixture factor model using a dirichlet process prior on the number of clusters (mixture components)
 // and an IBP prior on the number of latent factors.
   
-  // [[Rcpp::depends("RcppArmadillo")]]
-  // [[Rcpp::export]]
+// [[Rcpp::depends("RcppArmadillo")]]
+// [[Rcpp::export]]
   
-  Rcpp::List DirichletIBPPLSModel(arma::mat Y, arma::mat X, int k1, int K, int iniL, int TruncateL, int iter, 
+Rcpp::List DirichletIBPPLSModel(arma::mat Y, arma::mat X, int k1, int K, int iniL, int TruncateL, int iter, 
                                   int maxK, int nu0, double sigma, double r, double s, double alpha, double alpha2, 
                                   arma::rowvec mu0, arma::mat Sigma0, int kappa0, double m, double g, double c, double d, 
                                   double kappa, double diagH, double h1, double h2, double s1, double s2, int iter_to_average){
@@ -1749,7 +2826,7 @@ Rcpp::List PLSIBPfactormodel(arma::mat Y, arma::mat X, int k1, int k2, int iter,
     int p = Y.n_cols;
     int n = X.n_rows; 
     int q = X.n_cols;
-    
+
     double har = harmonic(q);
     
     arma::mat matd1 = arma::zeros<arma::mat>(k1, k1);
@@ -1924,7 +3001,7 @@ Rcpp::List PLSIBPfactormodel(arma::mat Y, arma::mat X, int k1, int k2, int iter,
           arma::mat VAugmented = arma::randn<arma::mat>(knew, q)*sigma;
           arma::mat lambdaUAugmented = FAugmented%VAugmented;
           
-          psi_x_inv.diag() = 1/(psi_x_vector + 0.0001);
+          psi_x_inv.diag() = 1/(psi_x_vector + 0.000001);
           
           arma::mat term_10 = psi_x_inv*lambdaUAugmented.t();
           arma::cube H_i = arma::zeros<arma::cube>(knew, knew, TruncateL); 
@@ -2048,7 +3125,7 @@ Rcpp::List PLSIBPfactormodel(arma::mat Y, arma::mat X, int k1, int k2, int iter,
       }
       
       // Sample Q_i 
-      psi_x_inv.diag() = 1/(psi_x_vector + 0.0001);
+      psi_x_inv.diag() = 1/(psi_x_vector + 0.000001);
       
       //Rcpp::Rcout << activeK << std::endl;
       A = X - Z*lambdaX;
@@ -2104,8 +3181,8 @@ Rcpp::List PLSIBPfactormodel(arma::mat Y, arma::mat X, int k1, int k2, int iter,
       E_y = Y - Z*lambdaY;
       for(int j = 0; j < p; ++j){
         psi_y_vector(j) = 1/(R::rgamma(g + n/2, 1/(h1 + sum(vectorise(E_y.col(j)%E_y.col(j)))/2)));
-        if(psi_y_vector(j) < 0.0001){
-          psi_y_vector(j) = 0.0001;
+        if(psi_y_vector(j) < 0.000001){
+          psi_y_vector(j) = 0.000001;
         }
       }
       psi_y.diag() = psi_y_vector;
@@ -2115,8 +3192,8 @@ Rcpp::List PLSIBPfactormodel(arma::mat Y, arma::mat X, int k1, int k2, int iter,
       
       for(int j = 0; j < q; ++j){
         psi_x_vector(j) = 1/(R::rgamma(g + n/2, 1/(h2 + sum(vectorise(E_x.col(j)%E_x.col(j)))/2)));
-        if(psi_x_vector(j) < 0.0001){
-          psi_x_vector(j) = 0.0001;
+        if(psi_x_vector(j) < 0.000001){
+          psi_x_vector(j) = 0.000001;
         }
       }
       psi_x.diag() = psi_x_vector;
@@ -2181,6 +3258,524 @@ Rcpp::List PLSIBPfactormodel(arma::mat Y, arma::mat X, int k1, int k2, int iter,
   }
 
 
+// Using a partial least square framework to model ERCC spike-in
+// A mixture factor model using a dirichlet process prior on the number of clusters (mixture components)
+// and an IBP prior on the number of latent factors. Adding the modeling of dropout.
+
+// [[Rcpp::depends("RcppArmadillo")]]
+// [[Rcpp::export]]
+
+Rcpp::List DirichletIBPPLSModelZero(arma::mat Y, arma::mat X, arma::mat Hind, arma::mat Gind, arma::vec tau1, arma::vec tau2, 
+                                    double kappa_int, arma::vec kappagrid, int k1, int K, int iniL, int TruncateL, int iter, 
+                                int maxK, int nu0, double sigma, double r, double s, double alpha, double alpha2, 
+                                arma::rowvec mu0, arma::mat Sigma0, int kappa0, double m, double g, double c, double d, 
+                                double kappa_ibp, double diagH, double h1, double h2, double s1, double s2, int iter_to_average){
+  // initialization 
+  arma::mat U1;
+  arma::vec S1;
+  arma::mat V1;
+  
+  bool SVD1success = false;
+  while(SVD1success == false) {
+    SVD1success = svd(U1, S1, V1, Y);
+    if(SVD1success == false){
+      Y += 1e-4;
+    }
+  }
+  
+  int p = Y.n_cols;
+  int n = X.n_rows; 
+  int q = X.n_cols;
+  
+  double kappa = kappa_int;
+  int kappan = kappagrid.n_elem;
+  
+  double har = harmonic(q);
+  
+  arma::mat matd1 = arma::zeros<arma::mat>(k1, k1);
+  matd1.diag() = sqrt(S1(arma::span(0, k1-1)));
+  arma::mat Z_Y = U1.cols(0, k1-1)*matd1;
+  arma::mat Z_Y_norm = (Z_Y - mean(vectorise(Z_Y)))/stddev(vectorise(Z_Y));
+  arma::mat lambdaY = initialize_lambda(Z_Y_norm, Y);
+  arma::mat lambdaX = initialize_lambda(Z_Y_norm, X); 
+  arma::mat res_x = X - Z_Y_norm*lambdaX;
+  
+  arma::mat U;
+  arma::vec S;
+  arma::mat P;
+  
+  bool SVD2success = false;
+  while(SVD2success == false) {
+    SVD2success = svd(U, S, P, res_x);
+    if(SVD2success == false){
+      res_x += 1e-4;
+    }
+  }
+  
+  arma::mat matd = arma::zeros<arma::mat>(K, K);
+  matd.diag() = sqrt(S(arma::span(0, K-1)));
+  arma::mat Z_X = U.cols(0, K-1)*matd;
+  arma::mat iniQ = (Z_X - mean(vectorise(Z_X)))/stddev(vectorise(Z_X));
+  arma::vec C = callKmeans(iniQ, iniL) - 1; 
+  arma::mat lamU = initialize_lambda(iniQ, res_x); 
+  
+  arma::umat a = abs(lamU) > Cquantile(vectorise(abs(lamU)), 0.3);   
+  arma::mat iniF = arma::conv_to<arma::mat>::from(a);
+  arma::mat inilambdaU = iniF%lamU;
+  arma::mat iniV = inilambdaU;
+  
+  arma::mat AveC = arma::zeros<arma::mat>(TruncateL, n);
+  arma::mat Mu = arma::zeros<arma::mat>(TruncateL, maxK);  
+  arma::cube Sigma = arma::zeros<arma::cube>(maxK, maxK, TruncateL); 
+  arma::vec seqx = arma::zeros<arma::vec>(TruncateL);
+  
+  for(int l = 0; l < iniL; ++l){
+    arma::uvec IDs = find(C == l);
+    Mu.submat(arma::span(l, l), arma::span(0, K-1)) = colmean(iniQ.rows(IDs));
+    Sigma.slice(l).submat(arma::span(0, K-1), arma::span(0, K-1)) = cov(iniQ.rows(IDs));
+    seqx(l) = l;
+  }
+  
+  arma::mat diagK = arma::eye(K, K);
+  arma::rowvec vecK = arma::zeros<arma::rowvec>(K);
+  
+  for(int l = iniL; l < TruncateL; ++l){
+    Mu.submat(arma::span(l, l), arma::span(0, K-1)) = mvrnormArma(vecK, diagK*2);
+    Sigma.slice(l).submat(arma::span(0, K-1), arma::span(0, K-1)) = riwishart(nu0 + K, diagK);
+    seqx(l) = l;
+  }
+  
+  arma::vec probF(2);
+  probF.zeros();
+  arma::vec seqF = arma::zeros<arma::vec>(2);
+  seqF(1) = 1;
+  
+  double sigma2inv = 1/(sigma*sigma);
+  
+  arma::mat k1I = arma::eye(k1, k1);
+  
+  arma::mat psi_x = arma::eye(q, q);
+  arma::mat psi_x_inv = psi_x;
+  arma::vec psi_x_vector = psi_x.diag();
+  
+  arma::mat psi_y = arma::eye(p, p);
+  arma::vec psi_y_vector = psi_y.diag();
+  
+  arma::mat psi = arma::eye(p+q, p+q);
+  
+  arma::mat H = arma::zeros<arma::mat>(k1, k1);
+  H.diag().fill(diagH);
+  
+  arma::vec prob(TruncateL);
+  prob.zeros();
+  
+  arma::mat Z = Z_Y_norm;
+  arma::mat lambda = join_rows(lambdaY, lambdaX);
+  arma::mat E_y = Y - Z*lambdaY;
+  arma::mat E_x = X - Z*lambdaX - iniQ*inilambdaU;
+  
+  arma::mat W = join_rows(Y, X - iniQ*inilambdaU);
+  arma::mat A = X - Z*lambdaX;
+  
+  arma::vec v = arma::zeros<arma::vec>(TruncateL);
+  arma::vec vProd = v;
+  arma::vec vProd_minus = v;
+  
+  arma::mat recordF = arma::zeros<arma::mat>(maxK, q);
+  arma::mat recordV = arma::zeros<arma::mat>(maxK, q);
+  arma::mat recordlambdaU = arma::zeros<arma::mat>(maxK, q);
+  arma::mat recordQ = arma::zeros<arma::mat>(n, maxK);
+  
+  int activeK = K;
+  recordF.rows(0, activeK-1) = iniF;
+  recordV.rows(0, activeK-1) = iniV;
+  recordlambdaU.rows(0, activeK-1) = inilambdaU;   
+  recordQ.cols(0, activeK - 1) = iniQ;
+  
+  for (int kk = 0; kk < iter; ++kk) { 
+    
+    // Sample F    
+    for(int j = 0; j < q; ++j){    
+      
+      arma::mat F = recordF.rows(0, activeK - 1);
+      arma::mat V = recordV.rows(0, activeK - 1);
+      arma::mat lambdaU = recordlambdaU.rows(0, activeK - 1);
+      arma::mat Q = recordQ.cols(0, activeK - 1);
+      arma::mat B = arma::zeros<arma::mat>(n, activeK);
+      
+      A = X - Z*lambdaX; 
+      
+      for(int k = 0; k < activeK; ++k){           
+        
+        for(int i = 0; i < n; ++i){          
+          double QFVsum = 0;
+          for(int l = 0; l < activeK; ++l){
+            if(l != k){
+              QFVsum = QFVsum + Q(i, l)*F(l, j)*V(l, j);
+            } 
+          }  
+          B(i, k) = A(i, j) - QFVsum;
+        }
+        
+        double sumQB = 0;
+        for(int i = 0; i < n; ++i){
+          sumQB = sumQB + Q(i, k)*B(i, k);
+        }
+        
+        double sumQ2 = as_scalar(Q.col(k).t()*Q.col(k));  
+        double sigmakj = 1/(sumQ2/psi_x_vector(j) + sigma2inv);
+        double mukj = sumQB*sigmakj/psi_x_vector(j);
+        arma::uvec allselect = find(F.row(k) == 1);
+        int active = 0;
+        if( F(k, j) == 1 ){
+          active = allselect.n_elem - 1;
+        } else {
+          active = allselect.n_elem;
+        }
+        
+        double ratio = 0.5*std::log(sigma2inv*sigmakj) + 0.5*mukj*mukj/sigmakj + logratio(active, q);
+        
+        probF(0) = 1/(std::exp(ratio)+1);
+        probF(1) = 1 - probF(0); 
+        F(k, j) = as_scalar(RcppArmadillo::sample(seqF, 1, FALSE, as<NumericVector>(wrap(probF)))); 
+        
+        if(F(k, j) == 1){
+          V(k, j)  = R::rnorm(mukj, sqrt(sigmakj));
+        } 
+        
+        lambdaU(k, j) = V(k, j)*F(k, j);
+        recordF(k, j) = F(k, j);
+        recordV(k, j) = V(k, j);
+        recordlambdaU(k, j) = lambdaU(k, j); 
+      }  
+      // Generate new features
+      int knew = R::rpois(alpha2/(q-1));
+      
+      if(knew != 0){
+        if(knew + activeK > maxK) break;
+        double ap = 0;
+        if(kappa == 0){
+          ap = - callpois(knew, alpha2/(q-1), TRUE);
+        } else {
+          ap = callpois(knew, alpha2/(q-1), TRUE) - callpois(knew, kappa*alpha2/(q-1), TRUE); 
+        }
+        arma::mat FAugmented = arma::zeros<arma::mat>(knew, q);
+        FAugmented.col(j).fill(1);
+        arma::mat VAugmented = arma::randn<arma::mat>(knew, q)*sigma;
+        arma::mat lambdaUAugmented = FAugmented%VAugmented;
+        
+        psi_x_inv.diag() = 1/(psi_x_vector + 0.000001);
+        
+        arma::mat term_10 = psi_x_inv*lambdaUAugmented.t();
+        arma::cube H_i = arma::zeros<arma::cube>(knew, knew, TruncateL); 
+        arma::cube G_i_firstterm = arma::zeros<arma::cube>(q, knew, TruncateL); 
+        arma::mat G_i_secondterm = arma::zeros<arma::mat>(TruncateL, knew);
+        
+        arma::mat H_i_firstterm = lambdaUAugmented*term_10;
+        arma::vec mu_sigma_mu = arma::zeros<arma::vec>(TruncateL);
+        arma::cube Sigma_augmented_list = arma::zeros<arma::cube>(knew, knew, TruncateL);
+        arma::mat Mu_augmented_list = arma::zeros<arma::mat>(TruncateL, knew);
+        
+        for(int l = 0; l < TruncateL; ++l){
+          arma::mat knewI = arma::eye(knew, knew);
+          Sigma_augmented_list.slice(l) = riwishart(knew + nu0, knewI); 
+          Mu_augmented_list.row(l) = mvrnormArma(arma::zeros<arma::rowvec>(knew), Sigma_augmented_list.slice(l)/kappa0);
+          if(any(C==l)){
+            arma::rowvec Mu_augmented = Mu_augmented_list.row(l);
+            arma::mat Sigma_augmented = Sigma_augmented_list.slice(l);
+            arma::mat inv_Sigma_augmented = inv(Sigma_augmented);
+            arma::mat term_9 = Mu_augmented*inv_Sigma_augmented;
+            mu_sigma_mu(l) = as_scalar(term_9*Mu_augmented.t());
+            H_i.slice(l) = H_i_firstterm + inv_Sigma_augmented;
+            arma::mat inv_H_l = inv(H_i.slice(l));
+            G_i_secondterm.row(l) = term_9*inv_H_l;
+            G_i_firstterm.slice(l) = term_10*inv_H_l; 		     
+          }	
+        }
+        
+        E_x = X - Z*lambdaX - Q*lambdaU;
+        double GHG_sum = 0; 
+        double mu_sigma_mu_sum = 0;
+        double det_H = 0;
+        
+        for(int i = 0; i < n; ++i){ 
+          arma::rowvec gt = E_x.row(i)*G_i_firstterm.slice(C(i)) + G_i_secondterm.row(C(i));
+          GHG_sum = GHG_sum + as_scalar(gt*H_i.slice(C(i))*gt.t());
+          mu_sigma_mu_sum = mu_sigma_mu_sum + mu_sigma_mu(C(i));
+          det_H = det_H + std::log(det(H_i.slice(C(i)))) + log(det(Sigma_augmented_list.slice(C(i))));
+        }					
+        double lratio  = - 0.5*det_H + 0.5*(GHG_sum - mu_sigma_mu_sum) + ap;
+        
+        int kfinal = 0;  
+        if(std::exp(lratio) > 1){
+          kfinal = knew;
+        }   
+        if(kfinal != 0){  
+          int newK = activeK + kfinal;
+          recordF.rows(activeK, newK - 1) = FAugmented;
+          recordV.rows(activeK, newK - 1) = VAugmented;
+          recordlambdaU.rows(activeK, newK - 1) = lambdaUAugmented;		
+          
+          arma::mat Q_alter = arma::zeros<arma::mat>(n, knew);
+          arma::mat term_11 = psi_x_inv*lambdaUAugmented.t();
+          arma::mat D_inv_firstterm = lambdaUAugmented*term_11;
+          
+          for(int i = 0; i < n; ++i){ 
+            arma::mat inv_Sigma_augmented_i = inv(Sigma_augmented_list.slice(C(i)));
+            arma::mat D_inv = inv(D_inv_firstterm + inv_Sigma_augmented_i);
+            arma::mat term_12 = E_x.row(i)*term_11 + Mu_augmented_list.row(C(i))*inv_Sigma_augmented_i;
+            arma::rowvec W_i = term_12*D_inv;
+            Q_alter.row(i) = mvrnormArma(W_i, D_inv);
+          }
+          
+          recordQ.cols(activeK, newK - 1) = Q_alter;
+          Mu.cols(activeK, newK - 1) = Mu_augmented_list;               
+          activeK = newK;
+        }
+      }         
+    }
+    //Rcpp::Rcout << "testf" << std::endl;
+    arma::uvec dseq = reorderMatF(recordF.rows(0, activeK - 1));  
+    arma::mat Fnew = subsetMat(recordF.rows(0, activeK - 1), dseq, TRUE);  
+    arma::mat Vnew = subsetMat(recordV.rows(0, activeK - 1), dseq, TRUE); 
+    arma::mat lambdaUnew = subsetMat(recordlambdaU.rows(0, activeK - 1), dseq, TRUE); 
+    arma::mat Qnew = subsetMat(recordQ.cols(0, activeK - 1), dseq, FALSE);
+    
+    activeK = Fnew.n_rows;
+    
+    arma::mat Munew = arma::zeros<arma::mat>(TruncateL, activeK);
+    arma::cube Sigmanew = arma::zeros<arma::cube>(activeK, activeK, TruncateL); 
+    
+    //Rcpp::Rcout << "test!" << std::endl; 
+    // Sample Mu_l, Sigma_l  
+    int nl = 0;
+    arma::vec currentL(TruncateL);
+    currentL.zeros();
+    for(int l = 0; l < TruncateL; ++l) {
+      arma::mat sumTerm = arma::zeros<arma::mat>(activeK, activeK); 
+      arma::rowvec muBar = arma::zeros<arma::rowvec>(activeK);
+      if(any(C == l)){
+        currentL(l) = 1;
+        arma::uvec IDs = find(C == l);
+        muBar = colmean(Qnew.rows(IDs));
+        nl = IDs.n_elem;
+        for(int ii = 0; ii < nl; ii++){
+          arma::rowvec ll = Qnew.row(IDs(ii)) - muBar;
+          sumTerm = sumTerm + ll.t()*ll;
+        }  
+      } 
+      Sigmanew.slice(l) = riwishart(nu0 + nl, arma::eye(activeK, activeK) + sumTerm + kappa0*nl*muBar.t()*muBar/(kappa0 + nl));  
+      Munew.row(l) = mvrnormArma(nl*muBar/(kappa0 + nl), Sigmanew.slice(l)/(kappa0 + nl)); //mu0 = 0
+    }	
+    
+    // Sample V_l
+    
+    for(int l = 0; l < TruncateL; ++l) {
+      arma::uvec ID1s = find(C == l);
+      arma::uvec ID2s = find(C > l);
+      if(any(C == l)){
+        v(l) = R::rbeta(1 + ID1s.n_elem, alpha + ID2s.n_elem);
+      } else {
+        v(l) = R::rbeta(1, alpha);
+      }	
+      if(l == 0){
+        vProd_minus(l) = std::log(1-v(l)); 
+        vProd(l) = std::log(v(l)); 
+      } else {
+        vProd_minus(l) = vProd_minus(l-1) + std::log(1-v(l));
+        vProd(l) = vProd_minus(l-1) + std::log(v(l));
+      }
+    }
+    
+    // Sample Q_i 
+    psi_x_inv.diag() = 1/(psi_x_vector + 0.000001);
+    
+    //Rcpp::Rcout << activeK << std::endl;
+    A = X - Z*lambdaX;
+    
+    arma::mat term_13 = psi_x_inv*lambdaUnew.t();
+    for(int i = 0; i < n; ++i) {
+      arma::mat inv_Sigmanew_i = inv(Sigmanew.slice(C(i))); 
+      arma::mat Dinv = inv(lambdaUnew*term_13 + inv_Sigmanew_i);
+      arma::mat term_14 = A.row(i)*term_13 + Munew.row(C(i))*inv_Sigmanew_i;
+      arma::rowvec Wi = term_14*Dinv;
+      Qnew.row(i) = mvrnormArma(Wi, Dinv);
+    }
+    
+    // Sample C_i
+    for(int i = 0; i < n; ++i) {
+      arma::vec likelihood = arma::zeros<arma::vec>(TruncateL);
+      for(int l = 0; l < TruncateL; ++l) {
+        likelihood(l) = vProd(l) + dmvnrmRowArma(Qnew.row(i), Munew.row(l), Sigmanew.slice(l), TRUE);
+      }
+      likelihood = likelihood + abs(max(likelihood));
+      likelihood = exp(likelihood);
+      prob = likelihood/sum(likelihood);
+      C(i) = as_scalar(RcppArmadillo::sample(seqx, 1, FALSE, as<NumericVector>(wrap(prob))));
+      
+    }
+    
+    //  Sample Z 
+    W = join_rows(Y, X - Qnew*lambdaUnew);
+    arma::mat sharedterm2 = fastInverse(psi, lambda, TRUE);
+    arma::mat term_15 =lambda*sharedterm2 ;
+    arma::mat E_Z_w = (term_15*W.t()).t();
+    arma::mat Var_Z_w = k1I - term_15*lambda.t();
+    for(int i = 0; i < n; ++i){
+      Z.row(i) = mvrnormArma(E_Z_w.row(i), Var_Z_w);
+    }
+    
+    arma::mat sharedHterm = fastInverse(H, Z, TRUE);
+    
+    // Sample lambdaY 
+    arma::mat term_16 = Y.t()*Z;
+    arma::mat term_16_2 = (term_16*sharedHterm).t();
+    lambdaY = sampleFromMND(k1, p, term_16_2, sharedHterm, psi_y);
+    
+    // Sample lambda_x
+    arma::mat term_17 = (X - Qnew*lambdaUnew).t();
+    arma::mat term_18 = Z*sharedHterm; 
+    arma::mat term_19 = (term_17*term_18).t();
+    lambdaX = sampleFromMND(k1, q, term_19, sharedHterm, psi_x);
+    
+    lambda = join_rows(lambdaY, lambdaX);
+    
+    // Sample psi_y, psi_x 
+    E_y = Y - Z*lambdaY;
+    for(int j = 0; j < p; ++j){
+      psi_y_vector(j) = 1/(R::rgamma(g + n/2, 1/(h1 + sum(vectorise(E_y.col(j)%E_y.col(j)))/2)));
+      if(psi_y_vector(j) < 0.000001){
+        psi_y_vector(j) = 0.000001;
+      }
+    }
+    psi_y.diag() = psi_y_vector;
+    h1 = R::rgamma(1 + g*p, 1/(1 + sum(1/psi_y_vector)));
+    
+    E_x = X - Z*lambdaX - Qnew*lambdaUnew;
+    
+    for(int j = 0; j < q; ++j){
+      psi_x_vector(j) = 1/(R::rgamma(g + n/2, 1/(h2 + sum(vectorise(E_x.col(j)%E_x.col(j)))/2)));
+      if(psi_x_vector(j) < 0.000001){
+        psi_x_vector(j) = 0.000001;
+      }
+    }
+    psi_x.diag() = psi_x_vector;
+    h2 = R::rgamma(1 + g*q, 1/(1 + sum(1/psi_x_vector)));
+    
+    psi.diag() = join_cols(psi_y_vector, psi_x_vector);
+    
+    //Sample sigma
+    sigma2inv = R::rgamma(c + sum(vectorise(Fnew))/2, 1/(d + sum(pow(lambdaUnew(arma::find(Fnew == 1)), 2))/2));	
+    sigma = sqrt(1/sigma2inv);
+    d = R::rgamma(1 + activeK, 1/(1 + sigma2inv*activeK));			
+    
+    double vProd_minus_add = 0;
+    double counter = 0;
+    for(int l = 0; l < TruncateL; ++l) {
+      if(currentL(l) == 1){
+        vProd_minus_add = vProd_minus_add + std::log(1-v(l));
+        counter = counter + 1;
+      }
+    }
+    
+    // Sample alpha
+    alpha = R::rgamma(s1 + counter, 1/(s2 - vProd_minus_add));	
+    
+    // Sample alpha2 
+    alpha2 = R::rgamma(1 + activeK, 1/(1 + har));
+    
+    //Rcpp::Rcout << "test12" << std::endl; 
+    
+    recordF.rows(0, activeK-1) = Fnew;
+    recordV.rows(0, activeK-1) = Vnew;
+    recordlambdaU.rows(0, activeK-1) = lambdaUnew;   
+    recordQ.cols(0, activeK-1) = Qnew; 
+    Mu.cols(0, activeK-1) = Munew; 
+    
+    for(int l = 0; l < TruncateL; ++l){
+      Sigma.slice(l).submat(arma::span(0, activeK-1), arma::span(0, activeK-1)) = Sigmanew.slice(l);
+    } 
+    
+    arma::vec kappa_likelihood = arma::zeros<arma::vec>(kappan);
+    
+    // Sample X_ij
+    for(int i = 0; i < n; ++i){
+      for(int j = 0; j < q; ++j){
+        if(Hind(i, j) == 1){
+          double term_ij = 2*kappa*psi_x_vector(j) + 1;
+          double mu_ij = (as_scalar(Qnew.row(i)*lambdaUnew.col(j)) + as_scalar(Z.row(i)*lambdaX.col(j)) 
+                            - 2*kappa*psi_x_vector(j)*tau1(j))/term_ij ;
+          double sigma_ij = psi_x_vector(j)/term_ij;
+          X(i, j) = R::rnorm(mu_ij, sigma_ij); 
+          
+          // Sample kappa
+          for(int s = 0; s < kappan; ++s){
+            kappa_likelihood(s) = kappa_likelihood(s) - kappagrid(s)*pow(X(i, j) + tau1(j), 2);
+          }
+        } else {
+          for(int s = 0; s < kappan; ++s){
+            kappa_likelihood(s) = kappa_likelihood(s) + std::log(1 - exp(- kappagrid(s)*pow(X(i, j) + tau1(j), 2)));
+          }
+        }
+        
+      }
+    }
+    
+    // Sample Y_ij
+    for(int i = 0; i < n; ++i){
+      for(int j = 0; j < p; ++j){
+        if(Gind(i, j) == 1){
+          double term_ij = 2*kappa*psi_y_vector(j) + 1;
+          double mu_ij = (as_scalar(Z.row(i)*lambdaY.col(j)) 
+                            - 2*kappa*psi_y_vector(j)*tau2(j))/term_ij ;
+          double sigma_ij = psi_y_vector(j)/term_ij;
+          Y(i, j) = R::rnorm(mu_ij, sigma_ij); 
+          
+          // Sample kappa
+          for(int s = 0; s < kappan; ++s){
+            kappa_likelihood(s) = kappa_likelihood(s) - kappagrid(s)*pow(Y(i, j) + tau2(j), 2);
+          }
+        } else {
+          for(int s = 0; s < kappan; ++s){
+            kappa_likelihood(s) = kappa_likelihood(s) + std::log(1 - exp(- kappagrid(s)*pow(Y(i, j) + tau2(j), 2)));
+          }
+        }
+        
+      }
+    }
+    
+    kappa_likelihood = kappa_likelihood + abs(max(kappa_likelihood));
+    kappa_likelihood = exp(kappa_likelihood);
+    arma::vec kappa_prob = kappa_likelihood/sum(kappa_likelihood);
+    kappa = as_scalar(RcppArmadillo::sample(kappagrid, 1, FALSE, as<NumericVector>(wrap(kappa_prob))));
+    
+    
+    if(iter - kk <= iter_to_average){
+      for(int i = 0; i < n; ++i) {
+        AveC(C(i), i) = AveC(C(i), i) + 1;
+      }
+    }
+  }    
+  
+  AveC = AveC/iter_to_average;      
+  
+  return Rcpp::List::create(
+    Rcpp::Named("Q") = recordQ.cols(0, activeK-1),
+    Rcpp::Named("F") = recordF.rows(0, activeK-1),
+    Rcpp::Named("C") = C,
+    Rcpp::Named("AveC") = AveC,
+    Rcpp::Named("Z") = Z,
+    Rcpp::Named("lambdaX") = lambdaX,
+    Rcpp::Named("lambdaY") = lambdaY,
+    Rcpp::Named("lambdaU") = recordlambdaU.rows(0, activeK-1), 
+    Rcpp::Named("Mu") = Mu,
+    Rcpp::Named("Sigma") = Sigma,
+    Rcpp::Named("sigma") = sigma,
+    Rcpp::Named("psi") = join_cols(psi_y_vector, psi_x_vector),
+    Rcpp::Named("kappa") = kappa); 
+}
+
+
 // [[Rcpp::depends("RcppArmadillo")]]
 // [[Rcpp::export]]
 
@@ -2222,7 +3817,7 @@ Rcpp::List factorEM(arma::mat X, arma::mat Y, int k,  int iter) {
     arma::mat E_ZZ_w_all = arma::zeros<arma::mat>(k, k);
     arma::mat w_E_z_w_all = arma::zeros<arma::mat>(p+q, k); 
     psi_vec = psi.diag();
-    psi_inv.diag() = 1/(psi_vec+0.00000001);
+    psi_inv.diag() = 1/(psi_vec+0.00001);
     
     shared_term = fastInverse(psi, lambda, TRUE);    
     arma::mat term_4 = lambda*shared_term;
@@ -2257,7 +3852,7 @@ Rcpp::List factorEM(arma::mat X, arma::mat Y, int k,  int iter) {
 // [[Rcpp::depends("RcppArmadillo")]]
 // [[Rcpp::export]]
 
-Rcpp::List PLSfactorEM(arma::mat X, arma::mat Y, int k1, int k2, int iter) {
+Rcpp::List PLSfactorEM(arma::mat X, arma::mat Y, int k1, int k2, int iter, double epsilon) {
   int p = Y.n_cols;
   int q = X.n_cols;
   int n = X.n_rows;
@@ -2298,7 +3893,7 @@ Rcpp::List PLSfactorEM(arma::mat X, arma::mat Y, int k1, int k2, int iter) {
   
   arma::vec psi_vec = psi.diag();
   arma::mat psi_inv = psi;
-  psi_inv.diag() = 1/(psi_vec+0.0001);
+  psi_inv.diag() = 1/(psi_vec+0.00001);
   
   arma::mat shared_term = arma::zeros<arma::mat>(p+q, p+q);
   arma::mat I = arma::zeros<arma::mat>(k, k);
@@ -2314,7 +3909,7 @@ Rcpp::List PLSfactorEM(arma::mat X, arma::mat Y, int k1, int k2, int iter) {
     arma::mat u_E_z_x_all = arma::zeros<arma::mat>(q, k2);
     
     psi_vec = psi.diag();
-    psi_inv.diag() = 1/(psi_vec+0.00000001);
+    psi_inv.diag() = 1/(psi_vec+0.00001);
     // Rcpp::Rcout << "Mark 2 " << psi_vec << std::endl;
     shared_term = fastInverse(psi, lambda, TRUE);
     //  Rcpp::Rcout << "Mark 2 "<< psi_vec << std::endl;      
@@ -2345,7 +3940,7 @@ Rcpp::List PLSfactorEM(arma::mat X, arma::mat Y, int k1, int k2, int iter) {
       arma::mat term_5 = W.row(j).t() - lambda_new.t()*E_Z_w.row(j).t();
       psi_term =	psi_term + term_5*W.row(j);
     }
-    if(sum(square(vectorise(abs(lambda.t()*lambda - lambda_new.t()*lambda_new)))) < 0.1) break;
+    if(sum(square(vectorise(abs(lambda.t()*lambda - lambda_new.t()*lambda_new)))) <= epsilon) break;
     psi.diag() = psi_term.diag()/n;
     lambda = lambda_new;
     lambda_u = lambda_u_new.t();
@@ -2462,7 +4057,7 @@ Rcpp::List PLSfactorEMpenalty(arma::mat Y, arma::mat X, int k1, int k2, int iter
   
   arma::vec psi_vec = psi.diag();
   arma::mat psi_inv = psi;
-  psi_inv.diag() = 1/(psi_vec+0.0001);
+  psi_inv.diag() = 1/(psi_vec+0.00001);
   
   arma::mat shared_term = arma::zeros<arma::mat>(p+q, p+q);
   arma::mat I = arma::zeros<arma::mat>(k, k);
@@ -2478,7 +4073,7 @@ Rcpp::List PLSfactorEMpenalty(arma::mat Y, arma::mat X, int k1, int k2, int iter
     arma::mat u_E_z_x_all = arma::zeros<arma::mat>(q, k2);
     
     psi_vec = psi.diag();
-    psi_inv.diag() = 1/(psi_vec+0.00000001);
+    psi_inv.diag() = 1/(psi_vec+0.00001);
     
     shared_term = fastInverse(psi, lambda, TRUE);    
     arma::mat term_4 = lambda*shared_term;
@@ -2509,8 +4104,8 @@ Rcpp::List PLSfactorEMpenalty(arma::mat Y, arma::mat X, int k1, int k2, int iter
       arma::mat Xtilde = arma::chol(matC); //SRoot
       arma::mat Ytilde = (matA*inv(Xtilde)).t();
       arma::mat D = arma::zeros<arma::mat>(k2, k2);
-      if(psi_vec(j) < 0.0001){
-        psi_vec(j) = 0.0001;
+      if(psi_vec(j) < 0.00001){
+        psi_vec(j) = 0.00001;
       }
       D.diag().fill(psi_vec(j)/2);
       //Rcpp::Rcout << "Mark 2 "<< psi_vec(j) << std::endl;
@@ -2759,7 +4354,7 @@ Rcpp::List EM_for_one_chunk(arma::mat W, arma::mat lambda, arma::mat psi, int k1
   
   arma::vec psi_vec = psi.diag();
   arma::mat psi_inv = psi;
-  psi_inv.diag() = 1/(psi_vec+0.0001);
+  psi_inv.diag() = 1/(psi_vec+0.000001);
   
   arma::mat I = arma::zeros<arma::mat>(k, k);
   I.diag().ones();
@@ -2803,7 +4398,7 @@ Rcpp::List PLSfactorEMchunk(arma::mat X, arma::mat Y, int k1, int k2, int iter, 
   while(SVDsuccess == false) {
     SVDsuccess =  svd(U, s, V, Y);
     if(SVDsuccess == false){
-      Y += 1e-4;
+      Y.diag() = Y.diag() + 0.1;
     }
   }
 
@@ -2823,7 +4418,7 @@ Rcpp::List PLSfactorEMchunk(arma::mat X, arma::mat Y, int k1, int k2, int iter, 
   while(SVDsuccess2 == false) {
     SVDsuccess2 = svd(U2, s2, V2, res_x);
     if(SVDsuccess2 == false){
-      res_x += 1e-4;
+      res_x.diag() = res_x.diag() + 0.1;
     }
   }
    

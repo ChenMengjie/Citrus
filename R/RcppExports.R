@@ -77,6 +77,10 @@ DirichletSpikeModel <- function(X, K, iniL, TruncateL, iter, nu0, sigma, r, s, a
     .Call('Citrus_DirichletSpikeModel', PACKAGE = 'Citrus', X, K, iniL, TruncateL, iter, nu0, sigma, r, s, alpha, mu0, Sigma0, kappa0, m, g, h, c, d, s1, s2, iter_to_average)
 }
 
+DirichletSpikeModelZero <- function(X, H, tau, kappa_int, kappagrid, K, iniL, TruncateL, iter, nu0, sigma, r, s, alpha, mu0, Sigma0, kappa0, m, g, h, c, d, s1, s2, iter_to_average) {
+    .Call('Citrus_DirichletSpikeModelZero', PACKAGE = 'Citrus', X, H, tau, kappa_int, kappagrid, K, iniL, TruncateL, iter, nu0, sigma, r, s, alpha, mu0, Sigma0, kappa0, m, g, h, c, d, s1, s2, iter_to_average)
+}
+
 IBPfactormodel <- function(X, numk, iter, sigma, alpha, kappa, g, h, c, d, limit) {
     .Call('Citrus_IBPfactormodel', PACKAGE = 'Citrus', X, numk, iter, sigma, alpha, kappa, g, h, c, d, limit)
 }
@@ -85,8 +89,16 @@ DirichletIBPModel <- function(X, K, iniL, TruncateL, iter, maxK, nu0, sigma, r, 
     .Call('Citrus_DirichletIBPModel', PACKAGE = 'Citrus', X, K, iniL, TruncateL, iter, maxK, nu0, sigma, r, s, alpha, alpha2, mu0, Sigma0, kappa0, m, g, h, c, d, kappa, s1, s2, iter_to_average)
 }
 
+DirichletIBPModelZero <- function(X, H, tau, kappa_int, kappagrid, K, iniL, TruncateL, iter, maxK, nu0, sigma, r, s, alpha, alpha2, mu0, Sigma0, kappa0, m, g, h, c, d, kappa_ibp, s1, s2, iter_to_average) {
+    .Call('Citrus_DirichletIBPModelZero', PACKAGE = 'Citrus', X, H, tau, kappa_int, kappagrid, K, iniL, TruncateL, iter, maxK, nu0, sigma, r, s, alpha, alpha2, mu0, Sigma0, kappa0, m, g, h, c, d, kappa_ibp, s1, s2, iter_to_average)
+}
+
 DirichletSpikePLSModel <- function(Y, X, k1, K, iniL, TruncateL, iter, nu0, sigma, r, s, alpha, mu0, Sigma0, kappa0, m, g, c, d, diagH, h1, h2, s1, s2, iter_to_average) {
     .Call('Citrus_DirichletSpikePLSModel', PACKAGE = 'Citrus', Y, X, k1, K, iniL, TruncateL, iter, nu0, sigma, r, s, alpha, mu0, Sigma0, kappa0, m, g, c, d, diagH, h1, h2, s1, s2, iter_to_average)
+}
+
+DirichletSpikePLSModelZero <- function(Y, X, Hind, Gind, tau1, tau2, kappa_int, kappagrid, k1, K, iniL, TruncateL, iter, nu0, sigma, r, s, alpha, mu0, Sigma0, kappa0, m, g, c, d, diagH, h1, h2, s1, s2, iter_to_average) {
+    .Call('Citrus_DirichletSpikePLSModelZero', PACKAGE = 'Citrus', Y, X, Hind, Gind, tau1, tau2, kappa_int, kappagrid, k1, K, iniL, TruncateL, iter, nu0, sigma, r, s, alpha, mu0, Sigma0, kappa0, m, g, c, d, diagH, h1, h2, s1, s2, iter_to_average)
 }
 
 PLSIBPfactormodel <- function(Y, X, k1, k2, iter, sigma, alpha, kappa, diagH, g, h1, h2, c, d, limit) {
@@ -97,12 +109,16 @@ DirichletIBPPLSModel <- function(Y, X, k1, K, iniL, TruncateL, iter, maxK, nu0, 
     .Call('Citrus_DirichletIBPPLSModel', PACKAGE = 'Citrus', Y, X, k1, K, iniL, TruncateL, iter, maxK, nu0, sigma, r, s, alpha, alpha2, mu0, Sigma0, kappa0, m, g, c, d, kappa, diagH, h1, h2, s1, s2, iter_to_average)
 }
 
+DirichletIBPPLSModelZero <- function(Y, X, Hind, Gind, tau1, tau2, kappa_int, kappagrid, k1, K, iniL, TruncateL, iter, maxK, nu0, sigma, r, s, alpha, alpha2, mu0, Sigma0, kappa0, m, g, c, d, kappa_ibp, diagH, h1, h2, s1, s2, iter_to_average) {
+    .Call('Citrus_DirichletIBPPLSModelZero', PACKAGE = 'Citrus', Y, X, Hind, Gind, tau1, tau2, kappa_int, kappagrid, k1, K, iniL, TruncateL, iter, maxK, nu0, sigma, r, s, alpha, alpha2, mu0, Sigma0, kappa0, m, g, c, d, kappa_ibp, diagH, h1, h2, s1, s2, iter_to_average)
+}
+
 factorEM <- function(X, Y, k, iter) {
     .Call('Citrus_factorEM', PACKAGE = 'Citrus', X, Y, k, iter)
 }
 
-PLSfactorEM <- function(X, Y, k1, k2, iter) {
-    .Call('Citrus_PLSfactorEM', PACKAGE = 'Citrus', X, Y, k1, k2, iter)
+PLSfactorEM <- function(X, Y, k1, k2, iter, epsilon) {
+    .Call('Citrus_PLSfactorEM', PACKAGE = 'Citrus', X, Y, k1, k2, iter, epsilon)
 }
 
 NaivePCA <- function(X, Y, k1, k2) {
