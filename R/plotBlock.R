@@ -1,6 +1,4 @@
-
-
-plotBlock <- function(Z, sep.height = 5, sep.width = 5, Color = TRUE, supportOnly = TRUE){
+plotBlock <- function(Z, sep.height = 5, sep.width = 5, Color = TRUE, supportOnly = TRUE, plotname = NULL){
   require(gplots)
   require(caret)
   
@@ -22,7 +20,7 @@ plotBlock <- function(Z, sep.height = 5, sep.width = 5, Color = TRUE, supportOnl
     colors_neg <- palette.gr.marray[1:128]
     sepcolor <- apply(aa, 2, function(x){
       y <- rep("white", P)
-      y[x > 0] <- colors_pos[x[x > 0]]
+      y[x > 0] <- colors_pos[x > 0]
       bb <- x[x < 0]
       y[x < 0] <- colors_neg[128 -abs(bb) +1]
       return(y)
@@ -36,8 +34,8 @@ plotBlock <- function(Z, sep.height = 5, sep.width = 5, Color = TRUE, supportOnl
     })
   } 
   
-  plot(0, 0, ylim=c(-1, (N+1)*sep.height), xlim=c(0, (P+1)*sep.width), type="n",
-       axes=F, ylab="", xlab="")
+  plot(0, 0, ylim=c(sep.height, (N+1)*sep.height), xlim=c(sep.width, (P+1)*sep.width), type="n",
+       axes=F, ylab="", xlab=plotname, font.lab=2, cex.lab=2)
   for(i in 1:N){ 
     rect(xleft = csep, ybottom = rep((N-i+1)*sep.height + sep.height/2, length(csep)),
          xright = csep + sep.width, 
@@ -48,5 +46,4 @@ plotBlock <- function(Z, sep.height = 5, sep.width = 5, Color = TRUE, supportOnl
        xright = csep[P] + sep.width, 
        ytop =  sep.height/2, lty = 1, lwd = 1,  col = NA, border = "black")
   
-}  
-
+} 

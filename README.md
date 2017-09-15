@@ -22,12 +22,31 @@ Now a normalized method and a clustering method are available in the distributed
 
   The description of method and a tutorial of software on clustering will be available shortly.
 
+
+### Installation
+
+**Citrus** relies on the following R packages: **Rcpp**, **RcppArmadillo**, **genlasso**, **gplots**. All packagess are hosted on CRAN. 
+  ```R
+  install.packages ("Rcpp")
+  install.packages ("RcppArmadillo")
+  install.packages ("genlasso")
+  install.packages ("gplots")
+  ```
+
+**Citrus** can be installed from github directly as follows:
+
+  ```R
+  install.packages ("devtools")
+  library(devtools)
+  install_github("ChenMengjie/Citrus")
+  ```
+  
 ### Why do we call it citrus? 
 Citrus is not a short name for any of our methods. To honor Bowtie/Cufflinks and Salmon/Sailfish series, we are creating a fruit collection. 
 
-### Author
-**Mengjie Chen** (UNC) 
+### Authors
 
+**Mengjie Chen** (U Chicago) 
 **Xiang Zhou** (Umich)
 
-Bug report, comments or questions please send to mengjie@email.unc.edu.
+Bug report, comments or questions please send to mengjiechen@uchicago.edu.

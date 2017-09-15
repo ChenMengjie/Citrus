@@ -805,3 +805,55 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+
+static const R_CallMethodDef CallEntries[] = {
+    {"Citrus_EvaluateSimilarity", (DL_FUNC) &Citrus_EvaluateSimilarity, 2},
+    {"Citrus_sampleFromMND", (DL_FUNC) &Citrus_sampleFromMND, 5},
+    {"Citrus_riwishart", (DL_FUNC) &Citrus_riwishart, 2},
+    {"Citrus_dmvnrmArma", (DL_FUNC) &Citrus_dmvnrmArma, 4},
+    {"Citrus_dmvnrmRowArma", (DL_FUNC) &Citrus_dmvnrmRowArma, 4},
+    {"Citrus_mvrnormArma", (DL_FUNC) &Citrus_mvrnormArma, 2},
+    {"Citrus_callpois", (DL_FUNC) &Citrus_callpois, 3},
+    {"Citrus_harmonic", (DL_FUNC) &Citrus_harmonic, 1},
+    {"Citrus_colmean", (DL_FUNC) &Citrus_colmean, 1},
+    {"Citrus_callKmeans", (DL_FUNC) &Citrus_callKmeans, 2},
+    {"Citrus_Cquantile", (DL_FUNC) &Citrus_Cquantile, 2},
+    {"Citrus_fastInverse", (DL_FUNC) &Citrus_fastInverse, 3},
+    {"Citrus_initialize_lambda", (DL_FUNC) &Citrus_initialize_lambda, 2},
+    {"Citrus_reorderMatF", (DL_FUNC) &Citrus_reorderMatF, 1},
+    {"Citrus_logratio", (DL_FUNC) &Citrus_logratio, 2},
+    {"Citrus_subsetMat", (DL_FUNC) &Citrus_subsetMat, 3},
+    {"Citrus_initilizationIBP", (DL_FUNC) &Citrus_initilizationIBP, 2},
+    {"Citrus_PLSinitilizationIBP", (DL_FUNC) &Citrus_PLSinitilizationIBP, 4},
+    {"Citrus_DirichletSpikeModel", (DL_FUNC) &Citrus_DirichletSpikeModel, 21},
+    {"Citrus_DirichletSpikeModelZero", (DL_FUNC) &Citrus_DirichletSpikeModelZero, 25},
+    {"Citrus_IBPfactormodel", (DL_FUNC) &Citrus_IBPfactormodel, 11},
+    {"Citrus_DirichletIBPModel", (DL_FUNC) &Citrus_DirichletIBPModel, 24},
+    {"Citrus_DirichletIBPModelZero", (DL_FUNC) &Citrus_DirichletIBPModelZero, 28},
+    {"Citrus_DirichletSpikePLSModel", (DL_FUNC) &Citrus_DirichletSpikePLSModel, 25},
+    {"Citrus_DirichletSpikePLSModelZero", (DL_FUNC) &Citrus_DirichletSpikePLSModelZero, 31},
+    {"Citrus_PLSIBPfactormodel", (DL_FUNC) &Citrus_PLSIBPfactormodel, 15},
+    {"Citrus_DirichletIBPPLSModel", (DL_FUNC) &Citrus_DirichletIBPPLSModel, 28},
+    {"Citrus_DirichletIBPPLSModelZero", (DL_FUNC) &Citrus_DirichletIBPPLSModelZero, 34},
+    {"Citrus_factorEM", (DL_FUNC) &Citrus_factorEM, 4},
+    {"Citrus_PLSfactorEM", (DL_FUNC) &Citrus_PLSfactorEM, 6},
+    {"Citrus_NaivePCA", (DL_FUNC) &Citrus_NaivePCA, 4},
+    {"Citrus_PLSinitilization", (DL_FUNC) &Citrus_PLSinitilization, 4},
+    {"Citrus_callLasso", (DL_FUNC) &Citrus_callLasso, 4},
+    {"Citrus_PLSfactorEMpenalty", (DL_FUNC) &Citrus_PLSfactorEMpenalty, 10},
+    {"Citrus_floss", (DL_FUNC) &Citrus_floss, 2},
+    {"Citrus_InNotIn", (DL_FUNC) &Citrus_InNotIn, 2},
+    {"Citrus_PLSfactorEMpenaltyTrain", (DL_FUNC) &Citrus_PLSfactorEMpenaltyTrain, 7},
+    {"Citrus_CountSparsity", (DL_FUNC) &Citrus_CountSparsity, 1},
+    {"Citrus_PLSfactorEMpenaltyCVonefold", (DL_FUNC) &Citrus_PLSfactorEMpenaltyCVonefold, 9},
+    {"Citrus_PLSfactorEMpenaltyNfoldCV", (DL_FUNC) &Citrus_PLSfactorEMpenaltyNfoldCV, 8},
+    {"Citrus_PLSfactorEMpenaltyGivenPen", (DL_FUNC) &Citrus_PLSfactorEMpenaltyGivenPen, 7},
+    {"Citrus_EM_for_one_chunk", (DL_FUNC) &Citrus_EM_for_one_chunk, 8},
+    {"Citrus_PLSfactorEMchunk", (DL_FUNC) &Citrus_PLSfactorEMchunk, 6},
+    {NULL, NULL, 0}
+};
+
+RcppExport void R_init_Citrus(DllInfo *dll) {
+    R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
+    R_useDynamicSymbols(dll, FALSE);
+}
