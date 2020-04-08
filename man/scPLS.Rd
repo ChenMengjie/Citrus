@@ -14,7 +14,7 @@ scPLS(Target, Control, k1, k2, iter = 500, alpha = 10, kappa = 2,
 \arguments{
 \item{Target:}{A $n$ by $q$ matrix for $q$ target genes from $n$ samples.}
 
-\item{Control:}{A $n$ by  $p$ matrix for $p$ control genes from $n$ samples. To remove cell cycle effect, input the matrix
+\item{Control:}{A $n$ by $p$ matrix for $p$ control genes from $n$ samples. To remove cell cycle effect, input the matrix
 of cell cycle gene expression. To remove technical effect, input the matrix of control gene expression.}
 
 \item{k1:}{The number of technical factors.}
